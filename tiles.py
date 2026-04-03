@@ -26,7 +26,8 @@ class PropertyTile(Tile):
 
 @dataclass
 class JailTile(Tile):
-    skips: int = 2
+    skips: int = 3
+    fine: int = 50
 
 
 @dataclass

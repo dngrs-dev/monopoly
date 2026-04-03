@@ -46,7 +46,21 @@ class PlayerMoved(Event):
     steps: int = None
     reason: str = None
 
-@dataclass 
+
+@dataclass
 class PlayerSkipTurn(Event):
     player_id: int
     turns_left: int = None
+
+
+@dataclass
+class PlayerPaidJailFine(Event):
+    player_id: int
+    amount: int
+
+
+@dataclass
+class PlayerRolledDice(Event):
+    player_id: int
+    dice1: int
+    dice2: int

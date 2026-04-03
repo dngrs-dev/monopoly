@@ -8,6 +8,7 @@ class Player:
     position: int = 0
     skip_turns: int = 0
     bankrupt: bool = False
+    in_jail: bool = False
 
     def move(self, steps: int, board_size: int):
         self.position = (self.position + steps) % board_size
