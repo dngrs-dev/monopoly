@@ -16,6 +16,13 @@ class PlayerLanded(Event):
 @dataclass
 class PlayerPassedStart(Event):
     player_id: int
+    amount: int
+
+
+@dataclass
+class PlayerLandedOnStart(Event):
+    player_id: int
+    amount: int
 
 
 @dataclass
@@ -64,3 +71,8 @@ class PlayerRolledDice(Event):
     player_id: int
     dice1: int
     dice2: int
+
+
+@dataclass
+class PlayerReleasedFromJail(Event):
+    player_id: int

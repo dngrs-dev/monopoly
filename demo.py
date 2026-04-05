@@ -1,47 +1,32 @@
 import random
-
+from game import Game, start_game, end_turn, TurnPhase, apply_command
 from board import Board
 from dice import Dice
-from game import Game, TurnPhase, apply_command, end_turn, start_game
 from player import Player
-from choices import (
-    BuyPropertyChoice,
-    DeclineBuyPropertyChoice,
-    RollDiceChoice,
-    PayFineChoice,
-    TryDoublesJailChoice,
-)
-from tiles import TileType, StartTile, PropertyTile, MoveTile, JailTile, ChanceTile
+from tiles import *
 
 
 def build_demo_board() -> Board:
-    tiles = [
-        StartTile(name="Start", tile_type=TileType.START, go_bonus=200, stay_bonus=100),
-        PropertyTile(
-            name="Mediterranean Ave", tile_type=TileType.PROPERTY, price=60, rent=2
-        ),
-        ChanceTile(name="Chance", tile_type=TileType.CHANCE),
-        PropertyTile(name="Baltic Ave", tile_type=TileType.PROPERTY, price=60, rent=4),
-        MoveTile(name="Go To Start", tile_type=TileType.MOVE, move_to=0),
-        PropertyTile(
-            name="Reading Railroad", tile_type=TileType.PROPERTY, price=200, rent=25
-        ),
-        JailTile(name="Jail", tile_type=TileType.JAIL, skips=1),
-        PropertyTile(
-            name="Oriental Ave", tile_type=TileType.PROPERTY, price=100, rent=6
-        ),
-    ]
-    return Board(tiles=tiles)
+    return Board(
+        tiles=[
+            StartTile(name="Start"),
+            PropertyTile(name="Mediterranean Avenue", price=60, rent=2),
+            ChanceTile(name="Chance"),
+            PropertyTile(name="Baltic Avenue", price=60, rent=4),
+            JailTile(name="Jail"),
+            PropertyTile(name="Oriental Avenue", price=100, rent=6),
+            GoToJailTile(name="Go To Jail"),
+            PropertyTile(name="Vermont Avenue", price=100, rent=6),
+        ]
+    )
 
 
-def print_events(events: list[object]) -> None:
-    for e in events:
-        print(f"  - {e}")
-
-
-def print_choices(choices: list[object]) -> None:
-    for c in choices:
-        print(f"  - {c}")
+def print_list(title: str, items: list[object]) -> None:
+    print(f"{title}:")
+    for item in items:
+        print(f"  - {item}")
+    if not items:
+        print("  (none)")
 
 
 def main() -> None:
@@ -60,40 +45,29 @@ def main() -> None:
     for turn in range(1, turns + 1):
         player = game.current_player()
         print(
-            f"\nTurn {turn} | Player {player.id} | balance={player.balance} pos={player.position} | skip_turns={player.skip_turns}"
+            f"\nTurn {turn} | Player {player.id} | balance={player.balance} pos={player.position} skip_turns={player.skip_turns}"
         )
         print(f"Current phase: {game.turn_phase}")
+        print_list("Events", events)
 
-        while choices:
+        while game.turn_phase != TurnPhase.END_TURN:
+            if not choices:
+                break  # No choices available, end turn
+
+            print_list("Available choices", choices)
             choice = choices[0]
-            print(f"{choice=}")
-            if isinstance(choice, RollDiceChoice):
-                game, ev2, choices = apply_command(game, choice)
-                events.extend(ev2)
-            if isinstance(choice, BuyPropertyChoice):
-                game, ev2, choices = apply_command(game, choice)
-                events.extend(ev2)
-            if isinstance(choice, DeclineBuyPropertyChoice):
-                game, ev2, choices = apply_command(game, choice)
-                events.extend(ev2)
-            if isinstance(choice, PayFineChoice):
-                game, ev2, choices = apply_command(game, choice)
-                events.extend(ev2)
-            if isinstance(choice, TryDoublesJailChoice):
-                game, ev2, choices = apply_command(game, choice)
-                events.extend(ev2)
-
-        print_events(events)
-        # print_choices(choices)
+            print(f"Applying choice: {choice}")
+            game, events, choices = apply_command(game, choice)
+            print_list("Events", events)
 
         if game.turn_phase == TurnPhase.END_TURN:
             print("Ending turn...")
             game, events, choices = end_turn(game)
 
     print("\nFinal state:")
-    for p in game.players:
+    for player in game.players:
         print(
-            f"Player {p.id}: balance={p.balance} position={p.position} skip_turns={p.skip_turns}"
+            f"Player {player.id}: balance={player.balance} position={player.position} skip_turns={player.skip_turns}"
         )
 
 
