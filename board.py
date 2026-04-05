@@ -10,5 +10,8 @@ class Board:
     def get_tile(self, position: int) -> Tile:
         return self.tiles[position]
 
+    def get_tile_position(self, tile: Tile) -> int:
+        return self.tiles.index(tile)
+
     def size(self) -> int:
         return len(self.tiles)

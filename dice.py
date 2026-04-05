@@ -9,13 +9,9 @@ class Dice:
     last_roll: int = None
     last_roll_pair: tuple[int, int] = None
 
-    def roll_two(self) -> tuple[int, int]:
+    def roll(self) -> tuple[int, int]:
         d1 = random.randint(self.min_value, self.max_value)
         d2 = random.randint(self.min_value, self.max_value)
         self.last_roll_pair = (d1, d2)
         self.last_roll = d1 + d2
         return d1, d2
-
-    def roll(self) -> int:
-        d1, d2 = self.roll_two()
-        return d1 + d2
