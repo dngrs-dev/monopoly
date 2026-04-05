@@ -4,14 +4,27 @@ from board import Board
 from dice import Dice
 from player import Player
 from tiles import *
+from deck import Deck
+from cards import *
 
+def build_demo_deck() -> Deck:
+    return Deck(
+        cards=[
+            MoveStepsCard(steps=3),
+            MoveToPositionCard(position=5),
+            MoneyCard(amount=100),
+            GoToJailCard(),
+            # GetOutOfJailFreeCard(),
+        ]
+    )
 
 def build_demo_board() -> Board:
+    deck = build_demo_deck()
     return Board(
         tiles=[
             StartTile(name="Start"),
             PropertyTile(name="Mediterranean Avenue", price=60, rent=2),
-            ChanceTile(name="Chance"),
+            ChanceTile(name="Chance", deck=deck),
             PropertyTile(name="Baltic Avenue", price=60, rent=4),
             JailTile(name="Jail"),
             PropertyTile(name="Oriental Avenue", price=100, rent=6),

@@ -104,7 +104,7 @@ def _(
             player_id=player.id,
             from_position=from_position,
             to_position=player.position,
-            reason=f"Go To Jail tile: {tile.name}",
+            reason=MoveReason.TILE_EFFECT,
         )
     )
     events.append(PlayerWentToJail(player_id=player.id))
@@ -112,6 +112,27 @@ def _(
     game.turn_phase = TurnPhase.END_TURN
     return game, events, choices
 
+
+@resolve_tile.register
+def _(tile: ChanceTile, game: Game, max_chain: int = 10) -> tuple[Game, list[Event], list[Choice]]:
+    player = game.current_player()
+    events: list[Event] = [_landing_event(player, tile)]
+    choices: list[Choice] = []
+
+    # Draw a card and resolve it
+    print(f"{tile.deck=}")
+    card = tile.deck.draw_card()
+    events.append(PlayerDrewCard(player_id=player.id, card_name=str(card)))
+    from card_handlers import resolve_card
+
+    game, card_events, card_choices = resolve_card(card, game)
+    events.extend(card_events)
+    choices.extend(card_choices)
+    if card_choices:
+        game.turn_phase = TurnPhase.AWAIT_CHOICE
+    else:
+        game.turn_phase = TurnPhase.END_TURN
+    return game, events, choices
 
 @resolve_tile.register
 def _(

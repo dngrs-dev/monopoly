@@ -41,7 +41,7 @@ def _(choice: RollDiceChoice, game: Game) -> tuple[Game, list[Event], list[Choic
             from_position=from_position,
             to_position=player.position,
             steps=roll,
-            reason="Rolled dice",
+            reason=MoveReason.ROLL_DICE,
         )
     )
 
@@ -154,7 +154,7 @@ def _(
                 from_position=from_position,
                 to_position=player.position,
                 steps=roll,
-                reason="Rolled doubles to get out of jail",
+                reason=MoveReason.ROLL_DICE,
             )
         )
         game.turn_phase = TurnPhase.RESOLVE_TILE

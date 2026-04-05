@@ -1,6 +1,5 @@
 from dataclasses import dataclass
-from enum import Enum, auto
-
+from deck import Deck
 
 @dataclass
 class Tile:
@@ -28,7 +27,7 @@ class JailTile(Tile):
 
 @dataclass
 class ChanceTile(Tile):
-    pass
+    deck: Deck
 
 
 @dataclass

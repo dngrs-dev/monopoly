@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import Enum, auto
 
 
 @dataclass
@@ -45,13 +46,20 @@ class PlayerWentToJail(Event):
     player_id: int
 
 
+class MoveReason(Enum):
+    ROLL_DICE = auto()
+    CARD = auto()
+    TILE_EFFECT = auto()
+    OTHER = auto()
+
+
 @dataclass
 class PlayerMoved(Event):
     player_id: int
     from_position: int
     to_position: int
     steps: int = None
-    reason: str = None
+    reason: MoveReason = None
 
 
 @dataclass
@@ -76,3 +84,14 @@ class PlayerRolledDice(Event):
 @dataclass
 class PlayerReleasedFromJail(Event):
     player_id: int
+
+@dataclass
+class PlayerPaidMoney(Event):
+    player_id: int
+    amount: int
+    reason: str = None
+    
+@dataclass
+class PlayerDrewCard(Event):
+    player_id: int
+    card_name: str
