@@ -122,7 +122,7 @@ def _(tile: ChanceTile, game: Game, max_chain: int = 10) -> tuple[Game, list[Eve
     # Draw a card and resolve it
     print(f"{tile.deck=}")
     card = tile.deck.draw_card()
-    events.append(PlayerDrewCard(player_id=player.id, card_name=str(card)))
+    events.append(PlayerDrewCard(player_id=player.id, card_name=type(card).__name__))
     from card_handlers import resolve_card
 
     game, card_events, card_choices = resolve_card(card, game)

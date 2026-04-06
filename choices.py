@@ -32,3 +32,7 @@ class TryDoublesJailChoice(Choice):
 @dataclass
 class RollDiceChoice(Choice):
     player_id: int
+    
+@dataclass
+class UseGetOutOfJailFreeCardChoice(Choice):
+    player_id: int

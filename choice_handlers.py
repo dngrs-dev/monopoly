@@ -4,7 +4,7 @@ from game import Game, TurnPhase
 from events import *
 from tiles import *
 from tile_handlers import resolve_tile
-
+from cards import *
 
 def _assert_turn(game: Game, player_id: int):
     if game.current_player().id != player_id:
@@ -176,4 +176,35 @@ def _(
         else:
             game.turn_phase = TurnPhase.END_TURN
 
+    return game, events, choices
+
+
+@apply_choice.register
+def _(choice: UseGetOutOfJailFreeCardChoice, game: Game) -> tuple[Game, list[Event], list[Choice]]:
+    _assert_turn(game, choice.player_id)
+
+    events: list[Event] = []
+    choices: list[Choice] = []
+
+    player = game.current_player()
+    if not player.in_jail:
+        raise ValueError("Player is not in jail")
+
+    card_index = next(
+        (i for i, card in enumerate(player.cards) if isinstance(card, GetOutOfJailFreeCard)),
+        None,
+    )
+    if card_index is None:
+        raise ValueError("Player does not have a Get Out of Jail Free card")
+
+    # Remove the card from player's hand
+    card = player.cards.pop(card_index)
+    events.append(PlayerUsedGetOutOfJailFreeCard(player_id=player.id))
+
+    player.in_jail = False
+    player.skip_turns = 0
+    
+    choices.append(RollDiceChoice(player_id=player.id))  # Allow player to roll immediately after using the card
+    events.append(PlayerReleasedFromJail(player_id=player.id))
+    
     return game, events, choices

@@ -105,5 +105,9 @@ def _(card: GetOutOfJailFreeCard, game: Game) -> tuple[Game, list[Event], list[C
     player = game.current_player()
     events: list[Event] = []
     choices: list[Choice] = []
-    raise NotImplementedError("GetOutOfJailFreeCard is not implemented yet")
+
+    player.cards = player.cards or []
+    player.cards.append(card)
+    # events.append(PlayerDrewCard(player_id=player.id, card_name=type(card).__name__))
+
     return game, events, choices

@@ -6,6 +6,7 @@ from player import Player
 from tiles import *
 from deck import Deck
 from cards import *
+from choices import *
 
 def build_demo_deck() -> Deck:
     return Deck(
@@ -14,7 +15,7 @@ def build_demo_deck() -> Deck:
             MoveToPositionCard(position=5),
             MoneyCard(amount=100),
             GoToJailCard(),
-            # GetOutOfJailFreeCard(),
+            GetOutOfJailFreeCard(),
         ]
     )
 
@@ -68,7 +69,11 @@ def main() -> None:
                 break  # No choices available, end turn
 
             print_list("Available choices", choices)
-            choice = choices[0]
+            # Get the getoutofjailfree card choice if available, otherwise just take the first choice
+            choice = next(
+                (c for c in choices if isinstance(c, UseGetOutOfJailFreeCardChoice)),
+                choices[0],
+            )
             print(f"Applying choice: {choice}")
             game, events, choices = apply_command(game, choice)
             print_list("Events", events)

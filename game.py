@@ -10,7 +10,9 @@ from choices import (
     PayFineChoice,
     TryDoublesJailChoice,
     RollDiceChoice,
+    UseGetOutOfJailFreeCardChoice,
 )
+from cards import GetOutOfJailFreeCard
 
 
 class TurnPhase(Enum):
@@ -45,6 +47,8 @@ def end_turn(game: Game) -> tuple[Game, list[Event], list[Choice]]:
             PayFineChoice(player_id=game.current_player().id, fine=50),
             TryDoublesJailChoice(player_id=game.current_player().id),
         ]
+        if any(isinstance(card, GetOutOfJailFreeCard) for card in game.current_player().cards):
+            choices.append(UseGetOutOfJailFreeCardChoice(player_id=game.current_player().id))
     else:
         choices = [RollDiceChoice(player_id=game.current_player().id)]
     return game, [], choices

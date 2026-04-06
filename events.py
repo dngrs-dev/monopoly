@@ -95,3 +95,7 @@ class PlayerPaidMoney(Event):
 class PlayerDrewCard(Event):
     player_id: int
     card_name: str
+    
+@dataclass
+class PlayerUsedGetOutOfJailFreeCard(Event):
+    player_id: int
