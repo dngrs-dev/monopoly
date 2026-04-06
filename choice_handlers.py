@@ -167,12 +167,8 @@ def _(
         player.skip_turns -= 1
         events.append(PlayerSkipTurn(player_id=player.id, turns_left=player.skip_turns))
         if player.skip_turns <= 0:
-            player.in_jail = False
-            events.append(
-                PlayerReleasedFromJail(player_id=player.id, method="serving time")
-            )
-            # Player will be able to move on next turn after serving time
-            game.turn_phase = TurnPhase.END_TURN
+            # Player must pay fine on next turn if they fail to roll doubles
+            choices.append(PayFineChoice(player_id=player.id, fine=50))
         else:
             game.turn_phase = TurnPhase.END_TURN
 
