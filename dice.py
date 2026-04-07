@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import random
 
 
@@ -6,8 +6,8 @@ import random
 class Dice:
     min_value: int = 1
     max_value: int = 6
-    last_roll: int = None
-    last_roll_pair: tuple[int, int] = None
+    last_roll: int = -1
+    last_roll_pair: tuple[int, int] = field(default_factory=lambda: (-1, -1))
 
     def roll(self) -> tuple[int, int]:
         d1 = random.randint(self.min_value, self.max_value)

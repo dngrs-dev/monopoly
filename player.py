@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from cards import Card
 
@@ -11,7 +11,7 @@ class Player:
     skip_turns: int = 0
     bankrupt: bool = False
     in_jail: bool = False
-    cards: list[Card] = None
+    cards: list[Card] = field(default_factory=list)
 
     def move(self, steps: int, board_size: int):
         self.position = (self.position + steps) % board_size
