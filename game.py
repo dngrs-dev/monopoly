@@ -13,6 +13,7 @@ from choices import (
     UseGetOutOfJailFreeCardChoice,
 )
 from cards import GetOutOfJailFreeCard
+from tiles import JailTile
 
 
 class TurnPhase(Enum):
@@ -43,12 +44,21 @@ def end_turn(game: Game) -> tuple[Game, list[Event], list[Choice]]:
     game.current_player_index = (game.current_player_index + 1) % len(game.players)
     game.turn_phase = TurnPhase.AWAIT_CHOICE
     if game.current_player().in_jail:
-        choices = [
-            PayFineChoice(player_id=game.current_player().id, fine=50),
-            TryDoublesJailChoice(player_id=game.current_player().id),
-        ]
-        if any(isinstance(card, GetOutOfJailFreeCard) for card in game.current_player().cards):
-            choices.append(UseGetOutOfJailFreeCardChoice(player_id=game.current_player().id))
+        tile = game.board.get_tile(game.current_player().position)
+        if not isinstance(tile, JailTile):
+            raise ValueError("Player is in jail but not on a JailTile")
+        else:
+            choices = [
+                PayFineChoice(player_id=game.current_player().id, fine=tile.fine),
+                TryDoublesJailChoice(player_id=game.current_player().id),
+            ]
+            if any(
+                isinstance(card, GetOutOfJailFreeCard)
+                for card in game.current_player().cards
+            ):
+                choices.append(
+                    UseGetOutOfJailFreeCardChoice(player_id=game.current_player().id)
+                )
     else:
         choices = [RollDiceChoice(player_id=game.current_player().id)]
     return game, [], choices

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from deck import Deck
 
+
 @dataclass
 class Tile:
     name: str
@@ -10,7 +11,7 @@ class Tile:
 class PropertyTile(Tile):
     price: int
     rent: int
-    owner: int = None
+    owner: int | None = None
 
 
 @dataclass

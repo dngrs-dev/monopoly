@@ -6,6 +6,7 @@ from tiles import *
 from tile_handlers import resolve_tile
 from cards import *
 
+
 def _assert_turn(game: Game, player_id: int):
     if game.current_player().id != player_id:
         raise ValueError("It's not the player's turn")
@@ -69,6 +70,10 @@ def _(choice: BuyPropertyChoice, game: Game) -> tuple[Game, list[Event], list[Ch
         raise ValueError("Property is already owned")
     if player.balance < tile.price:
         raise ValueError("Player cannot afford this property")
+    if tile.price != choice.offer_price:
+        raise ValueError("Offer price does not match property price")
+    if tile.name != choice.property_name:
+        raise ValueError("Property name does not match current tile")
 
     player.update_balance(-tile.price)
     tile.owner = player.id
@@ -176,7 +181,9 @@ def _(
 
 
 @apply_choice.register
-def _(choice: UseGetOutOfJailFreeCardChoice, game: Game) -> tuple[Game, list[Event], list[Choice]]:
+def _(
+    choice: UseGetOutOfJailFreeCardChoice, game: Game
+) -> tuple[Game, list[Event], list[Choice]]:
     _assert_turn(game, choice.player_id)
 
     events: list[Event] = []
@@ -187,7 +194,11 @@ def _(choice: UseGetOutOfJailFreeCardChoice, game: Game) -> tuple[Game, list[Eve
         raise ValueError("Player is not in jail")
 
     card_index = next(
-        (i for i, card in enumerate(player.cards) if isinstance(card, GetOutOfJailFreeCard)),
+        (
+            i
+            for i, card in enumerate(player.cards)
+            if isinstance(card, GetOutOfJailFreeCard)
+        ),
         None,
     )
     if card_index is None:
@@ -199,8 +210,10 @@ def _(choice: UseGetOutOfJailFreeCardChoice, game: Game) -> tuple[Game, list[Eve
 
     player.in_jail = False
     player.skip_turns = 0
-    
-    choices.append(RollDiceChoice(player_id=player.id))  # Allow player to roll immediately after using the card
+
+    choices.append(
+        RollDiceChoice(player_id=player.id)
+    )  # Allow player to roll immediately after using the card
     events.append(PlayerReleasedFromJail(player_id=player.id))
-    
+
     return game, events, choices
