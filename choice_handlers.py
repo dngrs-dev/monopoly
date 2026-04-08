@@ -33,7 +33,7 @@ def _(choice: RollDiceChoice, game: Game) -> tuple[Game, list[Event], list[Choic
     dice1, dice2 = game.dice.roll()
     roll = dice1 + dice2
     from_position = player.position
-    player.move(roll, len(game.board.tiles))
+    move_events = player.move_steps(roll, game.board)
 
     events.append(PlayerRolledDice(player_id=player.id, dice1=dice1, dice2=dice2))
     events.append(
@@ -45,6 +45,7 @@ def _(choice: RollDiceChoice, game: Game) -> tuple[Game, list[Event], list[Choic
             reason=MoveReason.ROLL_DICE,
         )
     )
+    events.extend(move_events)
 
     game.turn_phase = TurnPhase.RESOLVE_TILE
     game, tile_events, tile_choices = resolve_tile(
@@ -70,7 +71,7 @@ def _(choice: BuyPropertyChoice, game: Game) -> tuple[Game, list[Event], list[Ch
         raise ValueError("Property is already owned")
     if player.balance < tile.price:
         raise ValueError("Player cannot afford this property")
-    if tile.price != choice.offer_price:
+    if tile.price != choice.price:
         raise ValueError("Offer price does not match property price")
     if tile.name != choice.property_name:
         raise ValueError("Property name does not match current tile")
@@ -152,7 +153,7 @@ def _(
         # Move the player according to the roll
         from_position = player.position
         roll = dice1 + dice2
-        player.move(roll, len(game.board.tiles))
+        move_events = player.move_steps(roll, game.board)
         events.append(
             PlayerMoved(
                 player_id=player.id,
@@ -162,6 +163,7 @@ def _(
                 reason=MoveReason.ROLL_DICE,
             )
         )
+        events.extend(move_events)
         game.turn_phase = TurnPhase.RESOLVE_TILE
         game, tile_events, tile_choices = resolve_tile(
             game.board.get_tile(game.current_player().position), game
@@ -178,6 +180,7 @@ def _(
             game.turn_phase = TurnPhase.END_TURN
 
     return game, events, choices
+
 
 
 @apply_choice.register

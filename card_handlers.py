@@ -19,7 +19,7 @@ def _(card: MoveStepsCard, game: Game) -> tuple[Game, list[Event], list[Choice]]
     events: list[Event] = []
     choices: list[Choice] = []
     from_position = player.position
-    player.move(card.steps, board_size=len(game.board.tiles))
+    move_events = player.move_steps(card.steps, game.board)
     events.append(
         PlayerMoved(
             player_id=player.id,
@@ -29,6 +29,7 @@ def _(card: MoveStepsCard, game: Game) -> tuple[Game, list[Event], list[Choice]]
             reason=MoveReason.CARD,
         )
     )
+    events.extend(move_events)
     game, tile_events, tile_choices = resolve_tile(
         game.board.get_tile(player.position), game
     )
@@ -43,15 +44,18 @@ def _(card: MoveToPositionCard, game: Game) -> tuple[Game, list[Event], list[Cho
     events: list[Event] = []
     choices: list[Choice] = []
     from_position = player.position
-    player.position = card.position
+    steps_forward = (card.position - from_position) % game.board.size()
+    move_events = player.move_position(card.position, game.board)
     events.append(
         PlayerMoved(
             player_id=player.id,
             from_position=from_position,
             to_position=player.position,
+            steps=steps_forward,
             reason=MoveReason.CARD,
         )
     )
+    events.extend(move_events)
     game, tile_events, tile_choices = resolve_tile(
         game.board.get_tile(player.position), game
     )
@@ -106,8 +110,6 @@ def _(card: GetOutOfJailFreeCard, game: Game) -> tuple[Game, list[Event], list[C
     events: list[Event] = []
     choices: list[Choice] = []
 
-    player.cards = player.cards or []
     player.cards.append(card)
-    # events.append(PlayerDrewCard(player_id=player.id, card_name=type(card).__name__))
 
     return game, events, choices

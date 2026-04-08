@@ -69,13 +69,7 @@ def _(
     events: list[Event] = [_landing_event(player, tile)]
     choices: list[Choice] = []
 
-    # Give player the bonus for landing on or passing start
-    if player.position == game.board.get_tile_position(tile):
-        player.update_balance(tile.land_bonus)
-        events.append(PlayerLandedOnStart(player_id=player.id, amount=tile.land_bonus))
-    else:
-        player.update_balance(tile.pass_bonus)
-        events.append(PlayerPassedStart(player_id=player.id, amount=tile.pass_bonus))
+    # Passing or landing on start are handled in player movement logic, so just end turn here
 
     game.turn_phase = TurnPhase.END_TURN
     return game, events, choices
@@ -114,7 +108,9 @@ def _(
 
 
 @resolve_tile.register
-def _(tile: ChanceTile, game: Game, max_chain: int = 10) -> tuple[Game, list[Event], list[Choice]]:
+def _(
+    tile: ChanceTile, game: Game, max_chain: int = 10
+) -> tuple[Game, list[Event], list[Choice]]:
     player = game.current_player()
     events: list[Event] = [_landing_event(player, tile)]
     choices: list[Choice] = []
@@ -132,6 +128,7 @@ def _(tile: ChanceTile, game: Game, max_chain: int = 10) -> tuple[Game, list[Eve
     else:
         game.turn_phase = TurnPhase.END_TURN
     return game, events, choices
+
 
 @resolve_tile.register
 def _(

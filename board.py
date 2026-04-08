@@ -1,11 +1,15 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from tiles import Tile
+from tiles import Tile, StartTile
 
 
 @dataclass
 class Board:
     tiles: list[Tile]
+    start_tiles: list[int] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.find_start_tile_positions()
 
     def get_tile(self, position: int) -> Tile:
         return self.tiles[position]
@@ -15,3 +19,9 @@ class Board:
 
     def size(self) -> int:
         return len(self.tiles)
+
+    def find_start_tile_positions(self) -> None:
+        self.start_tiles = [
+            i for i, tile in enumerate(self.tiles) if isinstance(tile, StartTile)
+        ]
+
