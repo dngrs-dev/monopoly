@@ -87,6 +87,11 @@ def main() -> None:
         print(
             f"Player {player.id}: balance={player.balance} position={player.position} skip_turns={player.skip_turns}"
         )
+        
+    for tile in game.board.tiles:
+        print(f"Tile {tile.name}:")
+        for attr, value in vars(tile).items():
+            print(f"  {attr}: {value}")
 
 
 if __name__ == "__main__":

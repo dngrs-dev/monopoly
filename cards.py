@@ -1,9 +1,17 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    from deck import Deck
 
 
 @dataclass
 class Card:
     pass
+
 
 @dataclass
 class MoveToPositionCard(Card):
@@ -27,4 +35,4 @@ class GoToJailCard(Card):
 
 @dataclass
 class GetOutOfJailFreeCard(Card):
-    pass
+    origin_deck: Deck | None = None

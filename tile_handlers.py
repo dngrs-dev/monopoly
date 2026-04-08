@@ -4,6 +4,7 @@ from game import Game, TurnPhase
 from events import *
 from choices import *
 from player import Player
+from cards import GetOutOfJailFreeCard
 
 
 def _landing_event(player: Player, tile: Tile) -> PlayerLanded:
@@ -117,6 +118,8 @@ def _(
 
     # Draw a card and resolve it
     card = tile.deck.draw_card()
+    if isinstance(card, GetOutOfJailFreeCard):
+        card.origin_deck = tile.deck
     events.append(PlayerDrewCard(player_id=player.id, card_name=type(card).__name__))
     from card_handlers import resolve_card
 

@@ -18,6 +18,7 @@ def _(card: MoveStepsCard, game: Game) -> tuple[Game, list[Event], list[Choice]]
     player = game.current_player()
     events: list[Event] = []
     choices: list[Choice] = []
+    game.board.get_tile(player.position).deck.discard_card(card)
     from_position = player.position
     move_events = player.move_steps(card.steps, game.board)
     events.append(
@@ -43,6 +44,7 @@ def _(card: MoveToPositionCard, game: Game) -> tuple[Game, list[Event], list[Cho
     player = game.current_player()
     events: list[Event] = []
     choices: list[Choice] = []
+    game.board.get_tile(player.position).deck.discard_card(card)
     from_position = player.position
     steps_forward = (card.position - from_position) % game.board.size()
     move_events = player.move_position(card.position, game.board)
@@ -69,6 +71,7 @@ def _(card: MoneyCard, game: Game) -> tuple[Game, list[Event], list[Choice]]:
     player = game.current_player()
     events: list[Event] = []
     choices: list[Choice] = []
+    game.board.get_tile(player.position).deck.discard_card(card)
     player.update_balance(card.amount)
     events.append(
         PlayerPaidMoney(player_id=player.id, amount=card.amount, reason="card")
@@ -81,6 +84,7 @@ def _(card: GoToJailCard, game: Game) -> tuple[Game, list[Event], list[Choice]]:
     player = game.current_player()
     events: list[Event] = []
     choices: list[Choice] = []
+    game.board.get_tile(player.position).deck.discard_card(card)
 
     # Move player to jail
     from_position = player.position

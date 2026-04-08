@@ -182,7 +182,6 @@ def _(
     return game, events, choices
 
 
-
 @apply_choice.register
 def _(
     choice: UseGetOutOfJailFreeCardChoice, game: Game
@@ -210,6 +209,10 @@ def _(
     # Remove the card from player's hand
     card = player.cards.pop(card_index)
     events.append(PlayerUsedGetOutOfJailFreeCard(player_id=player.id))
+
+    # Return the card to the deck it was originally drawn from
+    if card.origin_deck is not None:
+        card.origin_deck.discard_card(card)
 
     player.in_jail = False
     player.skip_turns = 0
