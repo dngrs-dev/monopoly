@@ -32,7 +32,21 @@ class TryDoublesJailChoice(Choice):
 @dataclass
 class RollDiceChoice(Choice):
     player_id: int
-    
+
+
 @dataclass
 class UseGetOutOfJailFreeCardChoice(Choice):
     player_id: int
+
+
+@dataclass
+class AuctionBidChoice(Choice):
+    player_id: int
+    tile_position: int
+    bid: int
+
+
+@dataclass
+class AuctionPassChoice(Choice):
+    player_id: int
+    tile_position: int

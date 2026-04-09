@@ -99,3 +99,9 @@ class PlayerDrewCard(Event):
 @dataclass
 class PlayerUsedGetOutOfJailFreeCard(Event):
     player_id: int
+    
+@dataclass
+class AuctionStarted(Event):
+    tile_position: int
+    base_price: int
+    initial_player_id: int

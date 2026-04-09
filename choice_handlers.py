@@ -5,6 +5,7 @@ from events import *
 from tiles import *
 from tile_handlers import resolve_tile
 from cards import *
+from auction import Auction
 
 
 def _assert_turn(game: Game, player_id: int):
@@ -103,7 +104,29 @@ def _(
     if tile.owner is not None:
         raise ValueError("Property is already owned")
 
-    # No events for declining to buy (could be added in future)
+    if game.rules.auction_enabled:
+        game.auction = Auction(
+            tile_position=player.position,
+            base_price=tile.price,
+            initial_player_id=player.id,
+            step=1,
+            cursor_index=game.current_player_index,
+            active_bidders=[
+                p.id
+                for p in game.players
+                if not p.bankrupt and p.balance > 0 and p.id != player.id
+            ],
+        )
+        events.append(
+            AuctionStarted(
+                tile_position=player.position,
+                base_price=tile.price,
+                initial_player_id=player.id,
+            )
+        )
+        choices.extend(game.auction.start())
+        return game, events, choices
+
     game.turn_phase = TurnPhase.END_TURN
     return game, events, choices
 
@@ -221,5 +244,143 @@ def _(
         RollDiceChoice(player_id=player.id)
     )  # Allow player to roll immediately after using the card
     events.append(PlayerReleasedFromJail(player_id=player.id))
+
+    return game, events, choices
+
+
+@apply_choice.register
+def _(choice: AuctionBidChoice, game: Game) -> tuple[Game, list[Event], list[Choice]]:
+    _assert_turn(game, choice.player_id)
+
+    if game.auction is None:
+        raise ValueError("No active auction")
+    if choice.tile_position != game.auction.tile_position:
+        raise ValueError("Bid choice tile position does not match active auction")
+    if choice.player_id not in game.auction.active_player_id():
+        raise ValueError("Player is not an active bidder in this auction")
+
+    events: list[Event] = []
+    choices: list[Choice] = []
+
+    # Update auction state with the new bid
+    auction = game.auction
+    auction.last_bidder_id = choice.player_id
+    auction.last_bid_amount = choice.bid
+    auction.step += 1
+
+    if auction.check_auction_end():
+        winning_player_id = auction.active_player_ids[0]
+        winning_bid = auction.last_bid_amount
+        tile = game.board.get_tile(auction.tile_position)
+        if not isinstance(tile, PropertyTile):
+            raise ValueError("Auctioned tile is not a property")
+
+        # Transfer ownership of the property to the winning bidder
+        tile.owner = winning_player_id
+        winning_player = next(p for p in game.players if p.id == winning_player_id)
+        winning_player.update_balance(-winning_bid)
+
+        events.append(
+            PlayerBoughtProperty(
+                player_id=winning_player_id,
+                property_name=tile.name,
+                price=winning_bid,
+            )
+        )
+
+        # Clear the auction state
+        game.auction = None
+
+        # End the turn after the auction concludes
+        game.turn_phase = TurnPhase.END_TURN
+        return game, events, choices
+
+    # Move cursor to the next active bidder
+    auction.cursor_index = (auction.cursor_index + 1) % len(auction.active_player_ids)
+
+    # Generate choices for the next bidder
+    next_bidder_id = auction.active_player_id()
+    choices.append(
+        AuctionBidChoice(
+            player_id=next_bidder_id,
+            tile_position=auction.tile_position,
+            bid=auction.active_bid(),
+        )
+    )
+    choices.append(
+        AuctionPassChoice(
+            player_id=next_bidder_id,
+            tile_position=auction.tile_position,
+        )
+    )
+
+    return game, events, choices
+
+
+@apply_choice.register
+def _(choice: AuctionPassChoice, game: Game) -> tuple[Game, list[Event], list[Choice]]:
+    _assert_turn(game, choice.player_id)
+
+    if game.auction is None:
+        raise ValueError("No active auction")
+    if choice.tile_position != game.auction.tile_position:
+        raise ValueError("Pass choice tile position does not match active auction")
+    if choice.player_id not in game.auction.active_player_id():
+        raise ValueError("Player is not an active bidder in this auction")
+
+    events: list[Event] = []
+    choices: list[Choice] = []
+
+    # Remove the player from active bidders
+    auction = game.auction
+    auction.active_player_ids.remove(choice.player_id)
+
+    # Check if the auction has ended
+    if auction.check_auction_end():
+        winning_player_id = auction.active_player_ids[0]
+        winning_bid = auction.last_bid_amount
+        tile = game.board.get_tile(auction.tile_position)
+        if not isinstance(tile, PropertyTile):
+            raise ValueError("Auctioned tile is not a property")
+
+        # Transfer ownership of the property to the winning bidder
+        tile.owner = winning_player_id
+        winning_player = next(p for p in game.players if p.id == winning_player_id)
+        winning_player.update_balance(-winning_bid)
+
+        events.append(
+            PlayerBoughtProperty(
+                player_id=winning_player_id,
+                property_name=tile.name,
+                price=winning_bid,
+            )
+        )
+
+        # Clear the auction state
+        game.auction = None
+
+        # End the turn after the auction concludes
+        game.turn_phase = TurnPhase.END_TURN
+    else:
+        # Move cursor to the next active bidder
+        auction.cursor_index = (auction.cursor_index + 1) % len(
+            auction.active_player_ids
+        )
+
+        # Generate choices for the next bidder
+        next_bidder_id = auction.active_player_id()
+        choices.append(
+            AuctionBidChoice(
+                player_id=next_bidder_id,
+                tile_position=auction.tile_position,
+                bid=auction.active_bid(),
+            )
+        )
+        choices.append(
+            AuctionPassChoice(
+                player_id=next_bidder_id,
+                tile_position=auction.tile_position,
+            )
+        )
 
     return game, events, choices

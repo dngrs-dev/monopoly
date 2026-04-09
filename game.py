@@ -14,6 +14,8 @@ from choices import (
 )
 from cards import GetOutOfJailFreeCard
 from tiles import JailTile
+from rules import Rules
+from auction import Auction
 
 
 class TurnPhase(Enum):
@@ -29,6 +31,8 @@ class Game:
     dice: Dice
     current_player_index: int = 0
     turn_phase: TurnPhase = TurnPhase.AWAIT_CHOICE
+    rules: Rules = Rules()
+    auction: Auction | None = None
 
     def current_player(self) -> Player:
         return self.players[self.current_player_index]
