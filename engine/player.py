@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 
-from cards import Card
-from board import Board
-from events import (
+from engine.cards import Card
+from engine.board import Board
+from engine.events import (
     Event,
     PlayerPassedStart,
     PlayerLandedOnStart,

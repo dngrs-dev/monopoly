@@ -1,11 +1,11 @@
 from functools import singledispatch
-from choices import *
-from game import Game, TurnPhase
-from events import *
-from tiles import *
-from tile_handlers import resolve_tile
-from cards import *
-from auction import Auction
+from engine.choices import *
+from engine.game import Game, TurnPhase
+from engine.events import *
+from engine.tiles import *
+from engine.tile_handlers import resolve_tile
+from engine.cards import *
+from engine.auction import Auction
 
 
 def _assert_turn(game: Game, player_id: int, choice: Choice):

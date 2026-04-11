@@ -1,12 +1,12 @@
 import random
-from game import Game, start_game, end_turn, TurnPhase, apply_command
-from board import Board
-from dice import Dice
-from player import Player
-from tiles import *
-from deck import Deck
-from cards import *
-from choices import *
+from engine.game import Game, start_game, end_turn, TurnPhase, apply_command
+from engine.board import Board
+from engine.dice import Dice
+from engine.player import Player
+from engine.tiles import *
+from engine.deck import Deck
+from engine.cards import *
+from engine.choices import *
 
 def build_demo_deck() -> Deck:
     return Deck(

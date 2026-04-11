@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 import random
 
-from cards import Card
+from engine.cards import Card
 
 
 @dataclass

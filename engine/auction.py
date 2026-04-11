@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from choices import Choice, AuctionBidChoice, AuctionPassChoice
+from engine.choices import Choice, AuctionBidChoice, AuctionPassChoice
 
 
 @dataclass

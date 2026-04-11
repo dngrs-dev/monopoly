@@ -1,10 +1,10 @@
 from functools import singledispatch
-from tiles import *
-from game import Game, TurnPhase
-from events import *
-from choices import *
-from player import Player
-from cards import GetOutOfJailFreeCard
+from engine.tiles import *
+from engine.game import Game, TurnPhase
+from engine.events import *
+from engine.choices import *
+from engine.player import Player
+from engine.cards import GetOutOfJailFreeCard
 
 
 def _landing_event(player: Player, tile: Tile) -> PlayerLanded:

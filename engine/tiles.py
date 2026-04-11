@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from deck import Deck
+from engine.deck import Deck
 
 
 @dataclass

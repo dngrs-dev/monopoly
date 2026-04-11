@@ -1,21 +1,21 @@
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
-from board import Board
-from player import Player
-from dice import Dice
-from events import Event
-from choices import (
+from engine.board import Board
+from engine.player import Player
+from engine.dice import Dice
+from engine.events import Event
+from engine.choices import (
     Choice,
     PayFineChoice,
     TryDoublesJailChoice,
     RollDiceChoice,
     UseGetOutOfJailFreeCardChoice,
 )
-from cards import GetOutOfJailFreeCard
-from tiles import JailTile
-from rules import Rules
-from auction import Auction
+from engine.cards import GetOutOfJailFreeCard
+from engine.tiles import JailTile
+from engine.rules import Rules
+from engine.auction import Auction
 
 
 class TurnPhase(Enum):

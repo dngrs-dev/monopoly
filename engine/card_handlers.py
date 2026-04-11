@@ -1,11 +1,11 @@
 from functools import singledispatch
 
-from game import Game
-from cards import *
-from events import *
-from choices import Choice
-from tiles import *
-from tile_handlers import resolve_tile
+from engine.game import Game
+from engine.cards import *
+from engine.events import *
+from engine.choices import Choice
+from engine.tiles import *
+from engine.tile_handlers import resolve_tile
 
 
 @singledispatch

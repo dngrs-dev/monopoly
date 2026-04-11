@@ -2,8 +2,8 @@ from dataclasses import asdict, is_dataclass
 from typing import Any
 from uuid import uuid4
 
-from game import Game, apply_command, end_turn, TurnPhase
-from choices import Choice
+from engine.game import Game, apply_command, end_turn, TurnPhase
+from engine.choices import Choice
 
 
 class IllegalCommand(Exception):

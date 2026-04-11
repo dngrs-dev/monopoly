@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from tiles import Tile, StartTile
+from engine.tiles import Tile, StartTile
 
 
 @dataclass

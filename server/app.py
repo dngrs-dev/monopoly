@@ -6,14 +6,14 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from board import Board
-from dice import Dice
-from deck import Deck
-from cards import MoveStepsCard, MoveToPositionCard, MoneyCard, GoToJailCard, GetOutOfJailFreeCard
-from tiles import StartTile, PropertyTile, ChanceTile, JailTile, GoToJailTile
-from player import Player
-from game import Game, start_game
-from rules import Rules
+from engine.board import Board
+from engine.dice import Dice
+from engine.deck import Deck
+from engine.cards import MoveStepsCard, MoveToPositionCard, MoneyCard, GoToJailCard, GetOutOfJailFreeCard
+from engine.tiles import StartTile, PropertyTile, ChanceTile, JailTile, GoToJailTile
+from engine.player import Player
+from engine.game import Game, start_game
+from engine.rules import Rules
 
 from server.session import GameSession, IllegalCommand
 from server.protocol import is_join, is_choose
