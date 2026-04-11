@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Monopoly</title>
+  </head>
+  <body>
+    <h1>Monopoly</h1>
+
+    <div class="row">
+      <label>Room <input id="room" value="room1" /></label>
+      <label
+        >Player <input id="player" value="1" type="number" min="1"
+      /></label>
+      <button id="connect">Connect</button>
+      <button id="disconnect" disabled>Disconnect</button>
+      <span id="status">disconnected</span>
+    </div>
+
+    <p class="error" id="err"></p>
+
+    <h2>Snapshot</h2>
+    <pre id="snapshot">(none)</pre>
+
+    <h2>Events</h2>
+    <pre id="events">(none)</pre>
+
+    <h2>Choices</h2>
+    <div class="choices" id="choices"></div>
+
+    <script src="/static/ws_client.js"></script>
+  </body>
+</html>
