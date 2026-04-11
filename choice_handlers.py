@@ -8,11 +8,23 @@ from cards import *
 from auction import Auction
 
 
-def _assert_turn(game: Game, player_id: int):
-    if game.current_player().id != player_id:
-        raise ValueError("It's not the player's turn")
+def _assert_turn(game: Game, player_id: int, choice: Choice):
     if game.turn_phase != TurnPhase.AWAIT_CHOICE:
         raise ValueError("Not awaiting choice")
+
+    if isinstance(choice, (AuctionBidChoice, AuctionPassChoice)):
+        if game.auction is None:
+            raise ValueError("No active auction")
+        if game.auction.active_player_id() != player_id:
+            raise ValueError("It's not the player's auction turn")
+        return
+
+    # While an auction is active, only auction choices.
+    if game.auction is not None:
+        raise ValueError("Auction is active; only auction choices are allowed")
+
+    if game.current_player().id != player_id:
+        raise ValueError("It's not the player's turn")
 
 
 @singledispatch
@@ -22,7 +34,7 @@ def apply_choice(choice: Choice, game: Game) -> tuple[Game, list[Event], list[Ch
 
 @apply_choice.register
 def _(choice: RollDiceChoice, game: Game) -> tuple[Game, list[Event], list[Choice]]:
-    _assert_turn(game, choice.player_id)
+    _assert_turn(game, choice.player_id, choice)
 
     events: list[Event] = []
     choices: list[Choice] = []
@@ -59,7 +71,7 @@ def _(choice: RollDiceChoice, game: Game) -> tuple[Game, list[Event], list[Choic
 
 @apply_choice.register
 def _(choice: BuyPropertyChoice, game: Game) -> tuple[Game, list[Event], list[Choice]]:
-    _assert_turn(game, choice.player_id)
+    _assert_turn(game, choice.player_id, choice)
 
     events: list[Event] = []
     choices: list[Choice] = []
@@ -92,7 +104,7 @@ def _(choice: BuyPropertyChoice, game: Game) -> tuple[Game, list[Event], list[Ch
 def _(
     choice: DeclineBuyPropertyChoice, game: Game
 ) -> tuple[Game, list[Event], list[Choice]]:
-    _assert_turn(game, choice.player_id)
+    _assert_turn(game, choice.player_id, choice)
 
     events: list[Event] = []
     choices: list[Choice] = []
@@ -105,17 +117,20 @@ def _(
         raise ValueError("Property is already owned")
 
     if game.rules.auction_enabled:
+        # Order bidders by table order starting with the next player.
+        ordered_ids: list[int] = []
+        for offset in range(1, len(game.players) + 1):
+            p = game.players[(game.current_player_index + offset) % len(game.players)]
+            if not p.bankrupt and p.balance > 0:
+                ordered_ids.append(p.id)
+
         game.auction = Auction(
             tile_position=player.position,
             base_price=tile.price,
             initial_player_id=player.id,
-            step=1,
-            cursor_index=game.current_player_index,
-            active_bidders=[
-                p.id
-                for p in game.players
-                if not p.bankrupt and p.balance > 0 and p.id != player.id
-            ],
+            step=0,
+            cursor_index=0,
+            active_player_ids=ordered_ids,
         )
         events.append(
             AuctionStarted(
@@ -133,7 +148,7 @@ def _(
 
 @apply_choice.register
 def _(choice: PayFineChoice, game: Game) -> tuple[Game, list[Event], list[Choice]]:
-    _assert_turn(game, choice.player_id)
+    _assert_turn(game, choice.player_id, choice)
 
     events: list[Event] = []
     choices: list[Choice] = []
@@ -157,7 +172,7 @@ def _(choice: PayFineChoice, game: Game) -> tuple[Game, list[Event], list[Choice
 def _(
     choice: TryDoublesJailChoice, game: Game
 ) -> tuple[Game, list[Event], list[Choice]]:
-    _assert_turn(game, choice.player_id)
+    _assert_turn(game, choice.player_id, choice)
 
     events: list[Event] = []
     choices: list[Choice] = []
@@ -209,7 +224,7 @@ def _(
 def _(
     choice: UseGetOutOfJailFreeCardChoice, game: Game
 ) -> tuple[Game, list[Event], list[Choice]]:
-    _assert_turn(game, choice.player_id)
+    _assert_turn(game, choice.player_id, choice)
 
     events: list[Event] = []
     choices: list[Choice] = []
@@ -250,13 +265,11 @@ def _(
 
 @apply_choice.register
 def _(choice: AuctionBidChoice, game: Game) -> tuple[Game, list[Event], list[Choice]]:
-    _assert_turn(game, choice.player_id)
+    _assert_turn(game, choice.player_id, choice)
 
-    if game.auction is None:
-        raise ValueError("No active auction")
     if choice.tile_position != game.auction.tile_position:
         raise ValueError("Bid choice tile position does not match active auction")
-    if choice.player_id not in game.auction.active_player_id():
+    if choice.player_id not in game.auction.active_player_ids:
         raise ValueError("Player is not an active bidder in this auction")
 
     events: list[Event] = []
@@ -269,6 +282,12 @@ def _(choice: AuctionBidChoice, game: Game) -> tuple[Game, list[Event], list[Cho
     auction.step += 1
 
     if auction.check_auction_end():
+        # If nobody bid or everyone passed, the property stays unowned.
+        if not auction.active_player_ids or auction.last_bid_amount is None:
+            game.auction = None
+            game.turn_phase = TurnPhase.END_TURN
+            return game, events, choices
+
         winning_player_id = auction.active_player_ids[0]
         winning_bid = auction.last_bid_amount
         tile = game.board.get_tile(auction.tile_position)
@@ -319,13 +338,11 @@ def _(choice: AuctionBidChoice, game: Game) -> tuple[Game, list[Event], list[Cho
 
 @apply_choice.register
 def _(choice: AuctionPassChoice, game: Game) -> tuple[Game, list[Event], list[Choice]]:
-    _assert_turn(game, choice.player_id)
+    _assert_turn(game, choice.player_id, choice)
 
-    if game.auction is None:
-        raise ValueError("No active auction")
     if choice.tile_position != game.auction.tile_position:
         raise ValueError("Pass choice tile position does not match active auction")
-    if choice.player_id not in game.auction.active_player_id():
+    if choice.player_id not in game.auction.active_player_ids:
         raise ValueError("Player is not an active bidder in this auction")
 
     events: list[Event] = []
@@ -337,6 +354,12 @@ def _(choice: AuctionPassChoice, game: Game) -> tuple[Game, list[Event], list[Ch
 
     # Check if the auction has ended
     if auction.check_auction_end():
+        # If nobody bid or everyone passed, the property stays unowned.
+        if not auction.active_player_ids or auction.last_bid_amount is None:
+            game.auction = None
+            game.turn_phase = TurnPhase.END_TURN
+            return game, events, choices
+
         winning_player_id = auction.active_player_ids[0]
         winning_bid = auction.last_bid_amount
         tile = game.board.get_tile(auction.tile_position)

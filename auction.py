@@ -16,7 +16,8 @@ class Auction:
     active_player_ids: list[int] = field(default_factory=list)
 
     def active_bid(self) -> int:
-        return self.base_price * (1 + 0.1 * self.step)
+        # Keep bids integer-valued to match balances.
+        return int(self.base_price * (1 + 0.1 * self.step))
 
     def start(self) -> list[Choice]:
         # Start the auction with the initial player
@@ -39,8 +40,10 @@ class Auction:
         return choices
 
     def check_auction_end(self) -> bool:
-        # Auction ends when only one active player remains
-        return len(self.active_player_ids) == 1
+        # Auction ends when zero or one active player remains.
+        # 1: winner
+        # 0: nobody bid / everybody passed
+        return len(self.active_player_ids) <= 1
     
     def active_player_id(self) -> int:
         return self.active_player_ids[self.cursor_index]

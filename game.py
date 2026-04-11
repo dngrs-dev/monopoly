@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, auto
 
 from board import Board
@@ -31,7 +31,7 @@ class Game:
     dice: Dice
     current_player_index: int = 0
     turn_phase: TurnPhase = TurnPhase.AWAIT_CHOICE
-    rules: Rules = Rules()
+    rules: Rules = field(default_factory=Rules)
     auction: Auction | None = None
 
     def current_player(self) -> Player:
