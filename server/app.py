@@ -9,7 +9,13 @@ from fastapi.staticfiles import StaticFiles
 from engine.board import Board
 from engine.dice import Dice
 from engine.deck import Deck
-from engine.cards import MoveStepsCard, MoveToPositionCard, MoneyCard, GoToJailCard, GetOutOfJailFreeCard
+from engine.cards import (
+    MoveStepsCard,
+    MoveToPositionCard,
+    MoneyCard,
+    GoToJailCard,
+    GetOutOfJailFreeCard,
+)
 from engine.tiles import StartTile, PropertyTile, ChanceTile, JailTile, GoToJailTile
 from engine.player import Player
 from engine.game import Game, start_game
@@ -125,18 +131,24 @@ async def ws_endpoint(ws: WebSocket):
 
             if is_choose(msg):
                 if joined_room is None or room_id != msg["room_id"]:
-                    await ws.send_json({"type": "error", "message": "Not joined to that room"})
+                    await ws.send_json(
+                        {"type": "error", "message": "Not joined to that room"}
+                    )
                     continue
 
                 session: GameSession = joined_room["session"]
                 try:
-                    result = session.apply_choice_id(msg["choice_id"])
+                    result = session.apply_choice_id(
+                        msg["choice_id"], msg.get("payload")
+                    )
                 except IllegalCommand as e:
                     await ws.send_json({"type": "error", "message": str(e)})
                     continue
                 except Exception as e:
                     # Avoid leaking internals in production; OK for dev.
-                    await ws.send_json({"type": "error", "message": f"Server error: {e}"})
+                    await ws.send_json(
+                        {"type": "error", "message": f"Server error: {e}"}
+                    )
                     continue
 
                 await broadcast(

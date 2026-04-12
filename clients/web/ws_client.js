@@ -1,5 +1,7 @@
 let ws = null;
 let lastRoom = null;
+let lastSnapshot = null;
+let lastSendTradeChoice = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -19,6 +21,15 @@ function renderChoices(choiceList) {
   const root = $("choices");
   root.innerHTML = "";
 
+  lastSendTradeChoice = null;
+  for (const item of choiceList || []) {
+    if (item.choice?.type === "SendTradeOfferChoice") {
+      lastSendTradeChoice = item.choice;
+      break;
+    }
+  }
+  renderTradePanel(lastSendTradeChoice);
+
   if (!choiceList || choiceList.length === 0) {
     root.textContent = "(none)";
     return;
@@ -31,12 +42,39 @@ function renderChoices(choiceList) {
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       const room = $("room").value;
       const player = parseInt($("player").value, 10);
+
+      let payload = undefined;
+
+      if (item.choice?.type === "SendTradeOfferChoice") {
+        const offered_money = parseInt($("trade_offered_money").value, 10) || 0;
+        const requested_money =
+          parseInt($("trade_requested_money").value, 10) || 0;
+
+        const offered_positions = Array.from(
+          document.querySelectorAll('input[name="trade_offered_pos"]:checked'),
+        ).map((x) => parseInt(x.value, 10));
+
+        const requested_positions = Array.from(
+          document.querySelectorAll(
+            'input[name="trade_requested_pos"]:checked',
+          ),
+        ).map((x) => parseInt(x.value, 10));
+
+        payload = {
+          offered_money,
+          requested_money,
+          offered_properties_positions: offered_positions,
+          requested_properties_positions: requested_positions,
+        };
+      }
+
       ws.send(
         JSON.stringify({
           type: "choose",
           room_id: room,
           player_id: player,
           choice_id: item.id,
+          payload,
         }),
       );
     };
@@ -62,6 +100,7 @@ function onMessage(data) {
   }
 
   if (data.type === "joined") {
+    lastSnapshot = data.snapshot;
     renderJson($("snapshot"), data.snapshot);
     renderJson($("events"), null);
     renderChoices(data.choices);
@@ -69,6 +108,7 @@ function onMessage(data) {
   }
 
   if (data.type === "update") {
+    lastSnapshot = data.snapshot;
     renderJson($("snapshot"), data.snapshot);
     renderJson($("events"), data.events);
     renderChoices(data.choices);
@@ -127,3 +167,57 @@ $("connect").onclick = () => {
 $("disconnect").onclick = () => {
   if (ws) ws.close();
 };
+
+function renderTradePanel(sendChoice) {
+  const offeredRoot = $("trade_offered_props");
+  const requestedRoot = $("trade_requested_props");
+
+  offeredRoot.innerHTML = "";
+  requestedRoot.innerHTML = "";
+
+  if (!lastSnapshot || !sendChoice) {
+    offeredRoot.textContent = "(none)";
+    requestedRoot.textContent = "(none)";
+    return;
+  }
+
+  const tiles = lastSnapshot.tiles || [];
+
+  const offered = [];
+  const requested = [];
+
+  for (let pos = 0; pos < tiles.length; pos++) {
+    const t = tiles[pos];
+    if (!t || t.type !== "PropertyTile") continue;
+
+    if (t.owner === sendChoice.player_id) offered.push({ pos, name: t.name });
+    if (t.owner === sendChoice.receiving_player_id)
+      requested.push({ pos, name: t.name });
+  }
+
+  if (offered.length === 0) offeredRoot.textContent = "(none)";
+  for (const it of offered) {
+    const label = document.createElement("label");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.name = "trade_offered_pos";
+    cb.value = String(it.pos);
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(` ${it.name} (#${it.pos})`));
+    offeredRoot.appendChild(label);
+    offeredRoot.appendChild(document.createElement("div"));
+  }
+
+  if (requested.length === 0) requestedRoot.textContent = "(none)";
+  for (const it of requested) {
+    const label = document.createElement("label");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.name = "trade_requested_pos";
+    cb.value = String(it.pos);
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(` ${it.name} (#${it.pos})`));
+    requestedRoot.appendChild(label);
+    requestedRoot.appendChild(document.createElement("div"));
+  }
+}

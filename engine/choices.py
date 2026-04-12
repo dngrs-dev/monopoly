@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -50,3 +50,29 @@ class AuctionBidChoice(Choice):
 class AuctionPassChoice(Choice):
     player_id: int
     tile_position: int
+
+
+@dataclass
+class MakeTradeOfferChoice(Choice):
+    player_id: int
+    receiving_player_id: int
+
+
+@dataclass
+class SendTradeOfferChoice(Choice):
+    player_id: int
+    receiving_player_id: int
+    offered_money: int = 0
+    requested_money: int = 0
+    offered_properties_positions: list[int] = field(default_factory=list)
+    requested_properties_positions: list[int] = field(default_factory=list)
+
+
+@dataclass
+class AcceptTradeOfferChoice(Choice):
+    player_id: int
+
+
+@dataclass
+class RejectTradeOfferChoice(Choice):
+    player_id: int

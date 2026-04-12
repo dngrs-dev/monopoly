@@ -6,11 +6,24 @@ from engine.tiles import *
 from engine.tile_handlers import resolve_tile
 from engine.cards import *
 from engine.auction import Auction
+from engine.tradeoffer import TradeOffer
 
 
 def _assert_turn(game: Game, player_id: int, choice: Choice):
+    print(f"Applying choice: {choice}")
     if game.turn_phase != TurnPhase.AWAIT_CHOICE:
         raise ValueError("Not awaiting choice")
+
+    if game.trade_offer is not None:
+        if isinstance(choice, (AcceptTradeOfferChoice, RejectTradeOfferChoice)):
+            if player_id != game.trade_offer.receiving_player_id:
+                raise ValueError(
+                    "Only the receiving player can accept or reject the trade offer"
+                )
+            return
+        raise ValueError(
+            "A trade offer is active; only accept/reject choices are allowed"
+        )
 
     if isinstance(choice, (AuctionBidChoice, AuctionPassChoice)):
         if game.auction is None:
@@ -405,5 +418,189 @@ def _(choice: AuctionPassChoice, game: Game) -> tuple[Game, list[Event], list[Ch
                 tile_position=auction.tile_position,
             )
         )
+
+    return game, events, choices
+
+
+## TRADE OFFER
+
+
+def _get_player(game: Game, player_id: int):
+    player = next((p for p in game.players if p.id == player_id), None)
+    if player is None:
+        raise ValueError("Player not found")
+    return player
+
+
+def _assert_positions_owned_by(game: Game, positions: list[int], owner_id: int):
+    size = game.board.size()
+    seen: set[int] = set()
+    for pos in positions:
+        if not isinstance(pos, int):
+            raise ValueError("Position must be an integer")
+        if pos < 0 or pos >= size:
+            raise ValueError("Position out of board bounds")
+        if pos in seen:
+            raise ValueError("Duplicate position in list")
+        seen.add(pos)
+
+        tile = game.board.get_tile(pos)
+        if not isinstance(tile, PropertyTile):
+            raise ValueError(f"Tile at position {pos} is not a property")
+        if tile.owner != owner_id:
+            raise ValueError(
+                f"Tile at position {pos} is not owned by player {owner_id}"
+            )
+
+
+@apply_choice.register
+def _(
+    choice: MakeTradeOfferChoice, game: Game
+) -> tuple[Game, list[Event], list[Choice]]:
+    _assert_turn(game, choice.player_id, choice)
+
+    if choice.player_id == choice.receiving_player_id:
+        raise ValueError("Cannot make a trade offer to oneself")
+
+    _get_player(game, choice.receiving_player_id)  # Validate receiving player exists
+
+    events: list[Event] = []
+    choices: list[Choice] = []
+
+    choices.append(
+        SendTradeOfferChoice(
+            player_id=choice.player_id,
+            receiving_player_id=choice.receiving_player_id,
+        )
+    )
+    return game, events, choices
+
+
+@apply_choice.register
+def _(
+    choice: SendTradeOfferChoice, game: Game
+) -> tuple[Game, list[Event], list[Choice]]:
+    _assert_turn(game, choice.player_id, choice)
+
+    if choice.player_id == choice.receiving_player_id:
+        raise ValueError("Cannot send a trade offer to oneself")
+    if choice.offered_money < 0 or choice.requested_money < 0:
+        raise ValueError("Money amounts cannot be negative")
+
+    offering_player = _get_player(game, choice.player_id)
+    receiving_player = _get_player(game, choice.receiving_player_id)
+
+    if offering_player.balance < choice.offered_money:
+        raise ValueError("Offering player cannot afford the offered money")
+    if receiving_player.balance < choice.requested_money:
+        raise ValueError("Receiving player cannot afford the requested money")
+
+    game.trade_offer = TradeOffer(
+        offering_player_id=choice.player_id,
+        receiving_player_id=choice.receiving_player_id,
+        offered_money=choice.offered_money,
+        requested_money=choice.requested_money,
+        offered_properties_positions=choice.offered_properties_positions,
+        requested_properties_positions=choice.requested_properties_positions,
+    )
+
+    events: list[Event] = []
+    choices: list[Choice] = [
+        AcceptTradeOfferChoice(
+            player_id=choice.receiving_player_id,
+        ),
+        RejectTradeOfferChoice(
+            player_id=choice.receiving_player_id,
+        ),
+    ]
+
+    return game, events, choices
+
+
+@apply_choice.register
+def _(
+    choice: AcceptTradeOfferChoice, game: Game
+) -> tuple[Game, list[Event], list[Choice]]:
+    _assert_turn(game, choice.player_id, choice)
+
+    if game.trade_offer is None:
+        raise ValueError("No active trade offer to accept")
+    if game.trade_offer.receiving_player_id != choice.player_id:
+        raise ValueError("Only the receiving player can accept the trade offer")
+
+    offer = game.trade_offer
+    offering_player = _get_player(game, offer.offering_player_id)
+    receiving_player = _get_player(game, offer.receiving_player_id)
+
+    if offering_player.balance < offer.offered_money:
+        raise ValueError("Offering player cannot afford the offered money")
+    if receiving_player.balance < offer.requested_money:
+        raise ValueError("Receiving player cannot afford the requested money")
+
+    # Validate ownership of offered and requested properties
+    _assert_positions_owned_by(
+        game, offer.offered_properties_positions, offer.offering_player_id
+    )
+    _assert_positions_owned_by(
+        game, offer.requested_properties_positions, offer.receiving_player_id
+    )
+
+    # Execute the trade
+    offering_player.update_balance(-offer.offered_money)
+    offering_player.update_balance(offer.requested_money)
+    receiving_player.update_balance(-offer.requested_money)
+    receiving_player.update_balance(offer.offered_money)
+
+    for pos in offer.offered_properties_positions:
+        tile = game.board.get_tile(pos)
+        if isinstance(tile, PropertyTile):
+            tile.owner = receiving_player.id
+
+    for pos in offer.requested_properties_positions:
+        tile = game.board.get_tile(pos)
+        if isinstance(tile, PropertyTile):
+            tile.owner = offering_player.id
+
+    events: list[Event] = []
+    choices: list[Choice] = []
+
+    player = game.current_player()
+    choices.append(RollDiceChoice(player_id=player.id))
+    for p in game.players:
+        if p.id != player.id and not p.bankrupt:
+            choices.append(
+                MakeTradeOfferChoice(player_id=player.id, receiving_player_id=p.id)
+            )
+
+    # Clear the active trade offer
+    game.trade_offer = None
+
+    return game, events, choices
+
+
+@apply_choice.register
+def _(
+    choice: RejectTradeOfferChoice, game: Game
+) -> tuple[Game, list[Event], list[Choice]]:
+    _assert_turn(game, choice.player_id, choice)
+
+    if game.trade_offer is None:
+        raise ValueError("No active trade offer to reject")
+    if game.trade_offer.receiving_player_id != choice.player_id:
+        raise ValueError("Only the receiving player can reject the trade offer")
+
+    # Clear the active trade offer
+    game.trade_offer = None
+
+    events: list[Event] = []
+    choices: list[Choice] = []
+
+    player = game.current_player()
+    choices.append(RollDiceChoice(player_id=player.id))
+    for p in game.players:
+        if p.id != player.id and not p.bankrupt:
+            choices.append(
+                MakeTradeOfferChoice(player_id=player.id, receiving_player_id=p.id)
+            )
 
     return game, events, choices
