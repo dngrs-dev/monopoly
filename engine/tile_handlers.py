@@ -121,7 +121,7 @@ def _(
     if isinstance(card, GetOutOfJailFreeCard):
         card.origin_deck = tile.deck
     events.append(PlayerDrewCard(player_id=player.id, card_name=type(card).__name__))
-    from card_handlers import resolve_card
+    from engine.card_handlers import resolve_card
 
     game, card_events, card_choices = resolve_card(card, game)
     events.extend(card_events)

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
-    from deck import Deck
+    from engine.deck import Deck
 
 
 @dataclass
