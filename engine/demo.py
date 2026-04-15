@@ -3,10 +3,17 @@ from engine.game import Game, start_game, end_turn, TurnPhase, apply_command
 from engine.board import Board
 from engine.dice import Dice
 from engine.player import Player
-from engine.tiles import *
+from engine.tiles import StartTile, PropertyTile, ChanceTile, JailTile, GoToJailTile
 from engine.deck import Deck
-from engine.cards import *
-from engine.choices import *
+from engine.cards import (
+    MoveStepsCard,
+    MoveToPositionCard,
+    MoneyCard,
+    GoToJailCard,
+    GetOutOfJailFreeCard,
+)
+from engine.choices import UseGetOutOfJailFreeCardChoice
+
 
 def build_demo_deck() -> Deck:
     return Deck(
@@ -18,6 +25,7 @@ def build_demo_deck() -> Deck:
             GetOutOfJailFreeCard(),
         ]
     )
+
 
 def build_demo_board() -> Board:
     deck = build_demo_deck()
@@ -87,7 +95,7 @@ def main() -> None:
         print(
             f"Player {player.id}: balance={player.balance} position={player.position} skip_turns={player.skip_turns}"
         )
-        
+
     for tile in game.board.tiles:
         print(f"Tile {tile.name}:")
         for attr, value in vars(tile).items():

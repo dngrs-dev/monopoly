@@ -1,8 +1,23 @@
 from functools import singledispatch
-from engine.tiles import *
+from engine.tiles import (
+    Tile,
+    StartTile,
+    PropertyTile,
+    ChanceTile,
+    GoToJailTile,
+    JailTile,
+)
 from engine.game import Game, TurnPhase
-from engine.events import *
-from engine.choices import *
+from engine.events import (
+    Event,
+    PlayerLanded,
+    PlayerPaidRent,
+    PlayerDrewCard,
+    PlayerWentToJail,
+    MoveReason,
+    PlayerMoved,
+)
+from engine.choices import Choice, BuyPropertyChoice, DeclineBuyPropertyChoice
 from engine.player import Player
 from engine.cards import GetOutOfJailFreeCard
 

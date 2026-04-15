@@ -1,10 +1,23 @@
 from functools import singledispatch
 
 from engine.game import Game
-from engine.cards import *
-from engine.events import *
+from engine.cards import (
+    Card,
+    MoveStepsCard,
+    MoveToPositionCard,
+    MoneyCard,
+    GoToJailCard,
+    GetOutOfJailFreeCard,
+)
+from engine.events import (
+    Event,
+    PlayerMoved,
+    PlayerPaidMoney,
+    PlayerWentToJail,
+    MoveReason,
+)
 from engine.choices import Choice
-from engine.tiles import *
+from engine.tiles import JailTile
 from engine.tile_handlers import resolve_tile
 
 

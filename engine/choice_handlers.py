@@ -1,10 +1,35 @@
 from functools import singledispatch
-from engine.choices import *
+from engine.choices import (
+    Choice,
+    RollDiceChoice,
+    BuyPropertyChoice,
+    DeclineBuyPropertyChoice,
+    PayFineChoice,
+    TryDoublesJailChoice,
+    UseGetOutOfJailFreeCardChoice,
+    AuctionBidChoice,
+    AuctionPassChoice,
+    MakeTradeOfferChoice,
+    SendTradeOfferChoice,
+    AcceptTradeOfferChoice,
+    RejectTradeOfferChoice,
+)
 from engine.game import Game, TurnPhase
-from engine.events import *
-from engine.tiles import *
+from engine.events import (
+    Event,
+    PlayerRolledDice,
+    PlayerMoved,
+    MoveReason,
+    PlayerBoughtProperty,
+    AuctionStarted,
+    PlayerPaidJailFine,
+    PlayerReleasedFromJail,
+    PlayerSkipTurn,
+    PlayerUsedGetOutOfJailFreeCard,
+)
+from engine.tiles import PropertyTile
 from engine.tile_handlers import resolve_tile
-from engine.cards import *
+from engine.cards import GetOutOfJailFreeCard
 from engine.auction import Auction
 from engine.tradeoffer import TradeOffer
 
