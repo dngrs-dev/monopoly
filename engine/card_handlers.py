@@ -8,6 +8,7 @@ from engine.cards import (
     MoneyCard,
     GoToJailCard,
     GetOutOfJailFreeCard,
+    MoveToNearestTileByTypeCard,
 )
 from engine.events import (
     Event,
@@ -129,4 +130,52 @@ def _(card: GetOutOfJailFreeCard, game: Game) -> tuple[Game, list[Event], list[C
 
     player.cards.append(card)
 
+    return game, events, choices
+
+
+@resolve_card.register
+def _(card: MoveToNearestTileByTypeCard, game: Game) -> tuple[Game, list[Event], list[Choice]]:
+    player = game.current_player()
+    events: list[Event] = []
+    choices: list[Choice] = []
+    game.board.get_tile(player.position).deck.discard_card(card)
+
+    # Find nearest tile of the specified type
+    nearest_position = None
+    for tile_pos in range(0, game.board.size()):
+        tile = game.board.get_tile(tile_pos)
+        if isinstance(tile, card.tile_type):
+            if tile is not None and tile_pos != player.position:
+                nearest_position = min(
+                    nearest_position, tile_pos, key=lambda pos: (pos - player.position) % game.board.size()
+                )
+    if nearest_position is None:
+        player_tile = game.board.get_tile(player.position)
+        if isinstance(player_tile, card.tile_type):
+            nearest_position = player.position
+        else:
+            raise ValueError(f"No tile of type {card.tile_type} found on board")
+        
+    
+    
+    from_position = player.position
+    steps_forward = (nearest_position - from_position) % game.board.size()
+    steps_backward = (from_position - nearest_position) % game.board.size()
+    steps = steps_forward if steps_forward <= steps_backward else -steps_backward
+    move_events = player.move_steps(steps, game.board)
+    events.append(
+        PlayerMoved(
+            player_id=player.id,
+            from_position=from_position,
+            to_position=player.position,
+            steps=steps,
+            reason=MoveReason.CARD,
+        )
+    )
+    events.extend(move_events)
+    game, tile_events, tile_choices = resolve_tile(
+        game.board.get_tile(player.position), game
+    )
+    events.extend(tile_events)
+    choices.extend(tile_choices)
     return game, events, choices

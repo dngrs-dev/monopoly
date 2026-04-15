@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from engine.deck import Deck
+    from engine.tiles import Tile
 
 
 @dataclass
@@ -34,3 +35,8 @@ class GoToJailCard(Card):
 @dataclass
 class GetOutOfJailFreeCard(Card):
     origin_deck: Deck | None = None
+
+
+@dataclass
+class MoveToNearestTileByTypeCard(Card):
+    tile_type: Tile
