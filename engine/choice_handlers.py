@@ -13,6 +13,8 @@ from engine.choices import (
     SendTradeOfferChoice,
     AcceptTradeOfferChoice,
     RejectTradeOfferChoice,
+    BuyImprovementChoice,
+    SellImprovementChoice,
 )
 from engine.game import Game, TurnPhase
 from engine.events import (
@@ -26,9 +28,11 @@ from engine.events import (
     PlayerReleasedFromJail,
     PlayerSkipTurn,
     PlayerUsedGetOutOfJailFreeCard,
+    PlayerBoughtImprovement,
+    PlayerSoldImprovement,
 )
-from engine.tiles import PropertyTile
-from engine.tile_handlers import resolve_tile
+from engine.tiles import OwnableTile, StreetTile
+from engine.tile_handlers import resolve_tile, _calculate_rent
 from engine.cards import GetOutOfJailFreeCard
 from engine.auction import Auction
 from engine.tradeoffer import TradeOffer
@@ -116,7 +120,7 @@ def _(choice: BuyPropertyChoice, game: Game) -> tuple[Game, list[Event], list[Ch
 
     player = game.current_player()
     tile = game.board.get_tile(player.position)
-    if not isinstance(tile, PropertyTile):
+    if not isinstance(tile, OwnableTile):
         raise ValueError("Current tile is not a property")
     if tile.owner is not None:
         raise ValueError("Property is already owned")
@@ -149,7 +153,7 @@ def _(
 
     player = game.current_player()
     tile = game.board.get_tile(player.position)
-    if not isinstance(tile, PropertyTile):
+    if not isinstance(tile, OwnableTile):
         raise ValueError("Current tile is not a property")
     if tile.owner is not None:
         raise ValueError("Property is already owned")
@@ -329,7 +333,7 @@ def _(choice: AuctionBidChoice, game: Game) -> tuple[Game, list[Event], list[Cho
         winning_player_id = auction.active_player_ids[0]
         winning_bid = auction.last_bid_amount
         tile = game.board.get_tile(auction.tile_position)
-        if not isinstance(tile, PropertyTile):
+        if not isinstance(tile, OwnableTile):
             raise ValueError("Auctioned tile is not a property")
 
         # Transfer ownership of the property to the winning bidder
@@ -401,7 +405,7 @@ def _(choice: AuctionPassChoice, game: Game) -> tuple[Game, list[Event], list[Ch
         winning_player_id = auction.active_player_ids[0]
         winning_bid = auction.last_bid_amount
         tile = game.board.get_tile(auction.tile_position)
-        if not isinstance(tile, PropertyTile):
+        if not isinstance(tile, OwnableTile):
             raise ValueError("Auctioned tile is not a property")
 
         # Transfer ownership of the property to the winning bidder
@@ -470,7 +474,7 @@ def _assert_positions_owned_by(game: Game, positions: list[int], owner_id: int):
         seen.add(pos)
 
         tile = game.board.get_tile(pos)
-        if not isinstance(tile, PropertyTile):
+        if not isinstance(tile, OwnableTile):
             raise ValueError(f"Tile at position {pos} is not a property")
         if tile.owner != owner_id:
             raise ValueError(
@@ -578,12 +582,12 @@ def _(
 
     for pos in offer.offered_properties_positions:
         tile = game.board.get_tile(pos)
-        if isinstance(tile, PropertyTile):
+        if isinstance(tile, OwnableTile):
             tile.owner = receiving_player.id
 
     for pos in offer.requested_properties_positions:
         tile = game.board.get_tile(pos)
-        if isinstance(tile, PropertyTile):
+        if isinstance(tile, OwnableTile):
             tile.owner = offering_player.id
 
     events: list[Event] = []
@@ -627,5 +631,96 @@ def _(
             choices.append(
                 MakeTradeOfferChoice(player_id=player.id, receiving_player_id=p.id)
             )
+
+    return game, events, choices
+
+
+@apply_choice.register
+def _(
+    choice: BuyImprovementChoice, game: Game
+) -> tuple[Game, list[Event], list[Choice]]:
+    _assert_turn(game, choice.player_id, choice)
+
+    events: list[Event] = []
+    choices: list[Choice] = []
+
+    player = game.current_player()
+    tile = game.board.get_tile(player.position)
+    if not isinstance(tile, StreetTile):
+        raise ValueError("Current tile is not a street property")
+    if tile.owner != player.id:
+        raise ValueError("Player does not own this property")
+    if tile.improvement_level >= len(tile.rent_schedule) - 1:
+        raise ValueError("Property is already at max improvement level")
+    improvement_price = (
+        tile.improvement_prices
+        if isinstance(tile.improvement_prices, int)
+        else tile.improvement_prices[tile.improvement_level]
+    )
+    if choice.price != improvement_price:
+        raise ValueError("Offer price does not match improvement price")
+    if player.balance < improvement_price:
+        raise ValueError("Player cannot afford this improvement")
+    
+    group_tiles = game.board.get_group_tiles(tile.group_id)
+    if any(t.owner != player.id for t in group_tiles):
+        raise ValueError("Player must own all properties in the group to buy improvements")
+
+    player.update_balance(-improvement_price)
+    tile.improvement_level += 1
+    events.append(
+        PlayerBoughtImprovement(
+            player_id=player.id,
+            property_name=tile.name,
+            improvement_level=tile.improvement_level,
+            price=improvement_price,
+        )
+    )
+
+    tile.rent = _calculate_rent(tile, game)  # Update rent after improvement
+
+    return game, events, choices
+
+
+@apply_choice.register
+def _(
+    choice: SellImprovementChoice, game: Game
+) -> tuple[Game, list[Event], list[Choice]]:
+    _assert_turn(game, choice.player_id, choice)
+
+    events: list[Event] = []
+    choices: list[Choice] = []
+
+    player = game.current_player()
+    tile = game.board.get_tile(player.position)
+    if not isinstance(tile, StreetTile):
+        raise ValueError("Current tile is not a street property")
+    if tile.owner != player.id:
+        raise ValueError("Player does not own this property")
+    if tile.improvement_level <= 0:
+        raise ValueError("No improvements to sell on this property")
+    improvement_price = (
+        tile.improvement_prices
+        if isinstance(tile.improvement_prices, int)
+        else tile.improvement_prices[tile.improvement_level - 1]
+    )
+    improvement_sell_price = int(
+        improvement_price * tile.improvement_sell_price_multiplier
+    )
+    if choice.price != improvement_sell_price:
+        raise ValueError("Offer price does not match improvement sell price")
+
+    player.update_balance(improvement_sell_price)
+    tile.improvement_level -= 1
+    events.append(
+        PlayerSoldImprovement(
+            player_id=player.id,
+            property_name=tile.name,
+            improvement_level=tile.improvement_level,
+            price=improvement_sell_price,
+        )
+    )
+    
+    tile.rent = _calculate_rent(tile, game)  # Update rent after selling improvement
 
     return game, events, choices

@@ -16,7 +16,7 @@ from engine.cards import (
     GoToJailCard,
     GetOutOfJailFreeCard,
 )
-from engine.tiles import StartTile, PropertyTile, ChanceTile, JailTile, GoToJailTile
+from engine.tiles import StartTile, OwnableTile, ChanceTile, JailTile, GoToJailTile
 from engine.player import Player
 from engine.game import Game, start_game
 from engine.rules import Rules
@@ -59,13 +59,13 @@ def build_demo_board() -> Board:
     return Board(
         tiles=[
             StartTile(name="Start"),
-            PropertyTile(name="Mediterranean Avenue", price=60, rent=2),
+            OwnableTile(name="Mediterranean Avenue", price=60, rent=2),
             ChanceTile(name="Chance", deck=deck),
-            PropertyTile(name="Baltic Avenue", price=60, rent=4),
+            OwnableTile(name="Baltic Avenue", price=60, rent=4),
             JailTile(name="Jail"),
-            PropertyTile(name="Oriental Avenue", price=100, rent=6),
+            OwnableTile(name="Oriental Avenue", price=100, rent=6),
             GoToJailTile(name="Go To Jail"),
-            PropertyTile(name="Vermont Avenue", price=100, rent=6),
+            OwnableTile(name="Vermont Avenue", price=100, rent=6),
         ]
     )
 

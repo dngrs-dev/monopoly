@@ -2,10 +2,13 @@ from functools import singledispatch
 from engine.tiles import (
     Tile,
     StartTile,
-    PropertyTile,
+    OwnableTile,
     ChanceTile,
     GoToJailTile,
     JailTile,
+    StreetTile,
+    RailroadTile,
+    UtilityTile,
 )
 from engine.game import Game, TurnPhase
 from engine.events import (
@@ -37,7 +40,7 @@ def resolve_tile(
 
 @resolve_tile.register
 def _(
-    tile: PropertyTile, game: Game, max_chain: int = 10
+    tile: OwnableTile, game: Game, max_chain: int = 10
 ) -> tuple[Game, list[Event], list[Choice]]:
     player = game.current_player()
     events: list[Event] = [_landing_event(player, tile)]
@@ -61,6 +64,7 @@ def _(
         return game, events, choices
 
     # Pay rent
+    tile.rent = _calculate_rent(tile, game)  # Update tile with fresh rent
     player.update_balance(-tile.rent)
     owner = next((p for p in game.players if p.id == tile.owner), None)
     if owner is not None:
@@ -73,8 +77,32 @@ def _(
             rent=tile.rent,
         )
     )
+
     game.turn_phase = TurnPhase.END_TURN
     return game, events, choices
+
+
+def _calculate_rent(tile: OwnableTile, game: Game) -> int:
+    if isinstance(tile, StreetTile):
+        rent = tile.rent_schedule[tile.improvement_level]
+        if game.rules.double_rent_on_monopoly:
+            group_tiles = game.board.get_group_tiles(tile.group_id)
+            if tile.improvement_level == 0 and all(
+                t.owner == tile.owner for t in group_tiles
+            ):
+                rent *= 2
+        return rent
+    elif isinstance(tile, RailroadTile):
+        group_tiles = game.board.get_group_tiles(tile.group_id)
+        owned_count = sum(1 for t in group_tiles if t.owner == tile.owner)
+        return tile.rent_schedule[owned_count - 1] if owned_count > 0 else 0
+    elif isinstance(tile, UtilityTile):
+        group_tiles = game.board.get_group_tiles(tile.group_id)
+        # TODO: This should be based on dice roll, not a fixed multiplier
+        owned_count = sum(1 for t in group_tiles if t.owner == tile.owner)
+        return tile.rent_multiplier * owned_count if owned_count > 0 else 0
+    else:
+        return tile.rent
 
 
 @resolve_tile.register

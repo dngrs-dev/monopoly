@@ -76,3 +76,17 @@ class AcceptTradeOfferChoice(Choice):
 @dataclass
 class RejectTradeOfferChoice(Choice):
     player_id: int
+
+
+@dataclass
+class BuyImprovementChoice(Choice):
+    player_id: int
+    property_position: int
+    price: int
+
+
+@dataclass
+class SellImprovementChoice(Choice):
+    player_id: int
+    property_position: int
+    price: int

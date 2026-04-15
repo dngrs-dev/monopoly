@@ -105,3 +105,17 @@ class AuctionStarted(Event):
     tile_position: int
     base_price: int
     initial_player_id: int
+    
+@dataclass
+class PlayerBoughtImprovement(Event):
+    player_id: int
+    property_name: str
+    improvement_level: int
+    price: int
+    
+@dataclass
+class PlayerSoldImprovement(Event):
+    player_id: int
+    property_name: str
+    improvement_level: int
+    price: int

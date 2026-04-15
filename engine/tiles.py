@@ -7,11 +7,38 @@ class Tile:
     name: str
 
 
-@dataclass
-class PropertyTile(Tile):
+@dataclass(kw_only=True)
+class OwnableTile(Tile):  # Base class, have static rent
     price: int
     rent: int
     owner: int | None = None
+
+
+@dataclass
+class StreetTile(OwnableTile):
+    group_id: int
+    improvement_prices: (
+        list[int] | int
+    )  # must be the same length as rent_schedule or a single int if all improvements have the same price
+    rent_schedule: list[
+        int
+    ]  # index 0 = no houses, other -> number of improvement level
+    improvement_level: int = 0
+    improvement_sell_price_multiplier: float = 0.5
+
+
+@dataclass
+class RailroadTile(OwnableTile):
+    group_id: int
+    rent_schedule: list[
+        int
+    ]  # index 0 - basic rent, other -> number of railroads owned by same player
+
+
+@dataclass
+class UtilityTile(OwnableTile):
+    group_id: int
+    rent_multiplier: int  # Multpblier based on dice roll
 
 
 @dataclass

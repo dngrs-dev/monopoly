@@ -24,4 +24,7 @@ class Board:
         self.start_tiles = [
             i for i, tile in enumerate(self.tiles) if isinstance(tile, StartTile)
         ]
+        
+    def get_group_tiles(self, group_id: int) -> list[Tile]:
+        return [tile for tile in self.tiles if hasattr(tile, 'group_id') and tile.group_id == group_id]
 

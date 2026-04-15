@@ -3,7 +3,7 @@ from engine.game import Game, start_game, end_turn, TurnPhase, apply_command
 from engine.board import Board
 from engine.dice import Dice
 from engine.player import Player
-from engine.tiles import StartTile, PropertyTile, ChanceTile, JailTile, GoToJailTile
+from engine.tiles import StartTile, OwnableTile, ChanceTile, JailTile, GoToJailTile
 from engine.deck import Deck
 from engine.cards import (
     MoveStepsCard,
@@ -32,13 +32,13 @@ def build_demo_board() -> Board:
     return Board(
         tiles=[
             StartTile(name="Start"),
-            PropertyTile(name="Mediterranean Avenue", price=60, rent=2),
+            OwnableTile(name="Mediterranean Avenue", price=60, rent=2),
             ChanceTile(name="Chance", deck=deck),
-            PropertyTile(name="Baltic Avenue", price=60, rent=4),
+            OwnableTile(name="Baltic Avenue", price=60, rent=4),
             JailTile(name="Jail"),
-            PropertyTile(name="Oriental Avenue", price=100, rent=6),
+            OwnableTile(name="Oriental Avenue", price=100, rent=6),
             GoToJailTile(name="Go To Jail"),
-            PropertyTile(name="Vermont Avenue", price=100, rent=6),
+            OwnableTile(name="Vermont Avenue", price=100, rent=6),
         ]
     )
 

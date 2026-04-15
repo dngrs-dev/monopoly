@@ -12,9 +12,11 @@ from engine.choices import (
     RollDiceChoice,
     UseGetOutOfJailFreeCardChoice,
     MakeTradeOfferChoice,
+    BuyImprovementChoice,
+    SellImprovementChoice,
 )
 from engine.cards import GetOutOfJailFreeCard
-from engine.tiles import JailTile
+from engine.tiles import JailTile, StreetTile
 from engine.rules import Rules
 from engine.auction import Auction
 from engine.tradeoffer import TradeOffer
@@ -50,6 +52,26 @@ def start_game(game: Game) -> tuple[Game, list[Event], list[Choice]]:
             choices.append(
                 MakeTradeOfferChoice(player_id=player.id, receiving_player_id=p.id)
             )
+    # Add buy improvement choices for properties that can be improved
+    for tile in game.board.tiles:
+        if isinstance(tile, StreetTile):
+            if tile.owner == player.id:
+                group_tiles = game.board.get_group_tiles(tile.group_id)
+                if all(t.owner == player.id for t in group_tiles):
+                    if tile.improvement_level < len(tile.rent_schedule) - 1:
+                        choices.append(
+                            BuyImprovementChoice(
+                                player_id=player.id,
+                                tile_position=game.board.tiles.index(tile),
+                            )
+                        )
+                    if tile.improvement_level > 0:
+                        choices.append(
+                            SellImprovementChoice(
+                                player_id=player.id,
+                                tile_position=game.board.tiles.index(tile),
+                            )
+                        )
     return game, [], choices
 
 
