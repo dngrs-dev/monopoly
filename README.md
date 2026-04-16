@@ -39,7 +39,7 @@ Web demo:
 
 ## Requirements
 
-- Python 3.11+ should work (`typing.NotRequired` not supported in older versions). Tested only on Python 3.14.
+- Python 3.11+
 - Install dependencies:
 
 ```bash
