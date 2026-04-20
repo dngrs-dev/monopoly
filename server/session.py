@@ -1,6 +1,7 @@
 from dataclasses import asdict, is_dataclass, replace
 from typing import Any
 from uuid import uuid4
+from enum import Enum
 
 from engine.game import Game, apply_command, end_turn, TurnPhase
 from engine.choices import Choice, SendTradeOfferChoice
@@ -11,10 +12,14 @@ class IllegalCommand(Exception):
 
 
 def to_jsonable(obj: Any) -> Any:
+    if obj is None:
+        return None
+    if isinstance(obj, Enum):
+        return obj.name
     if is_dataclass(obj):
         d = asdict(obj)
         d["type"] = type(obj).__name__
-        return d
+        return to_jsonable(d)
     if isinstance(obj, list):
         return [to_jsonable(x) for x in obj]
     if isinstance(obj, dict):
