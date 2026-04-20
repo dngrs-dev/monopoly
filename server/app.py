@@ -5,7 +5,6 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
 from uuid import uuid4
 
 from fastapi import (
@@ -17,7 +16,7 @@ from fastapi import (
     Response,
     status,
 )
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from jose import JWTError, jwt
@@ -42,6 +41,7 @@ from server.session import GameSession, IllegalCommand
 from server.protocol import is_join, is_choose
 
 
+load_dotenv()
 app = FastAPI()
 
 COOKIE_NAME = "monopoly_session"
