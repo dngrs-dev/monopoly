@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Monopoly - Game</title>
+  </head>
+  <body>
+    <h1>Monopoly</h1>
+
+    <div class="row">
+      <div>You: <span id="me">(loading)</span></div>
+      <div>Player: <span id="player">(unassigned)</span></div>
+
+      <label>Room <input id="room" value="room1" /></label>
+      <button id="disconnect" disabled>Disconnect</button>
+      <span id="status">disconnected</span>
+    </div>
+
+    <p class="error" id="err"></p>
+
+    <h2>Snapshot</h2>
+    <pre id="snapshot">(none)</pre>
+
+    <h2>Events</h2>
+    <pre id="events">(none)</pre>
+
+    <h2>Trade</h2>
+    <div>
+      <div>
+        <strong>Offered money</strong>
+        <input id="trade_offered_money" type="number" value="0" min="0" />
+      </div>
+      <div>
+        <strong>Requested money</strong>
+        <input id="trade_requested_money" type="number" value="0" min="0" />
+      </div>
+
+      <div style="margin-top: 8px">
+        <div><strong>Offer (your properties)</strong></div>
+        <div id="trade_offered_props">(none)</div>
+      </div>
+
+      <div style="margin-top: 8px">
+        <div><strong>Request (their properties)</strong></div>
+        <div id="trade_requested_props">(none)</div>
+      </div>
+    </div>
+
+    <h2>Choices</h2>
+    <div class="choices" id="choices"></div>
+
+    <script src="/static/game/game.js"></script>
+  </body>
+</html>
