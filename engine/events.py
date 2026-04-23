@@ -85,37 +85,57 @@ class PlayerRolledDice(Event):
 class PlayerReleasedFromJail(Event):
     player_id: int
 
+
 @dataclass
 class PlayerPaidMoney(Event):
     player_id: int
     amount: int
     reason: str = None
-    
+
+
 @dataclass
 class PlayerDrewCard(Event):
     player_id: int
     card_name: str
-    
+
+
 @dataclass
 class PlayerUsedGetOutOfJailFreeCard(Event):
     player_id: int
-    
+
+
 @dataclass
 class AuctionStarted(Event):
     tile_position: int
     base_price: int
     initial_player_id: int
-    
+
+
 @dataclass
 class PlayerBoughtImprovement(Event):
     player_id: int
     property_name: str
     improvement_level: int
     price: int
-    
+
+
 @dataclass
 class PlayerSoldImprovement(Event):
     player_id: int
     property_name: str
     improvement_level: int
     price: int
+
+
+@dataclass
+class PlayerMortgagedProperty(Event):
+    player_id: int
+    property_name: str
+    mortgage_value: int
+
+
+@dataclass
+class PlayerUnmortgagedProperty(Event):
+    player_id: int
+    property_name: str
+    mortgage_value: int

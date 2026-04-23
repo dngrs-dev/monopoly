@@ -14,9 +14,11 @@ from engine.choices import (
     MakeTradeOfferChoice,
     BuyImprovementChoice,
     SellImprovementChoice,
+    MortgagePropertyChoice,
+    UnmortgagePropertyChoice,
 )
 from engine.cards import GetOutOfJailFreeCard
-from engine.tiles import JailTile, StreetTile
+from engine.tiles import JailTile, StreetTile, OwnableTile
 from engine.rules import Rules
 from engine.auction import Auction
 from engine.tradeoffer import TradeOffer
@@ -72,6 +74,23 @@ def start_game(game: Game) -> tuple[Game, list[Event], list[Choice]]:
                                 tile_position=game.board.tiles.index(tile),
                             )
                         )
+        if isinstance(tile, OwnableTile):
+            if tile.owner == player.id and not tile.mortgaged:
+                choices.append(
+                    MortgagePropertyChoice(
+                        player_id=player.id,
+                        property_position=game.board.tiles.index(tile),
+                        mortgage_value=tile.price // 2,
+                    )
+                )
+            if tile.owner == player.id and tile.mortgaged:
+                choices.append(
+                    UnmortgagePropertyChoice(
+                        player_id=player.id,
+                        property_position=game.board.tiles.index(tile),
+                        mortgage_value=int(tile.price * 0.55),
+                    )
+                )
     return game, [], choices
 
 
@@ -92,11 +111,11 @@ def end_turn(game: Game) -> tuple[Game, list[Event], list[Choice]]:
                 choices.append(UseGetOutOfJailFreeCardChoice(player_id=player.id))
     else:
         choices = [RollDiceChoice(player_id=player.id)]
-        for p in game.players:
-            if p.id != player.id and not p.bankrupt:
-                choices.append(
-                    MakeTradeOfferChoice(player_id=player.id, receiving_player_id=p.id)
-                )
+    for p in game.players:
+        if p.id != player.id and not p.bankrupt:
+            choices.append(
+                MakeTradeOfferChoice(player_id=player.id, receiving_player_id=p.id)
+            )
     return game, [], choices
 
 

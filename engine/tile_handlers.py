@@ -64,6 +64,9 @@ def _(
         return game, events, choices
 
     # Pay rent
+    if tile.mortgaged:
+        game.turn_phase = TurnPhase.END_TURN
+        return game, events, choices
     tile.rent = _calculate_rent(tile, game)  # Update tile with fresh rent
     player.update_balance(-tile.rent)
     owner = next((p for p in game.players if p.id == tile.owner), None)

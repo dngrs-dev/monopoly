@@ -12,6 +12,7 @@ class OwnableTile(Tile):  # Base class, have static rent
     price: int
     rent: int
     owner: int | None = None
+    mortgaged: bool = False
 
 
 @dataclass

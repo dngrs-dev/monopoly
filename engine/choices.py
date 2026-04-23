@@ -90,3 +90,17 @@ class SellImprovementChoice(Choice):
     player_id: int
     property_position: int
     price: int
+
+
+@dataclass
+class MortgagePropertyChoice(Choice):
+    player_id: int
+    property_position: int
+    mortgage_value: int
+
+
+@dataclass
+class UnmortgagePropertyChoice(Choice):
+    player_id: int
+    property_position: int
+    unmortgage_value: int
