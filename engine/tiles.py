@@ -62,3 +62,13 @@ class ChanceTile(Tile):
 @dataclass
 class GoToJailTile(Tile):
     pass
+
+
+@dataclass
+class NoneTile(Tile):
+    pass # Free parking or similar, no action when landed on
+
+
+@dataclass
+class PayTile(Tile):
+    amount: int

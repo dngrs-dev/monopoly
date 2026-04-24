@@ -45,41 +45,68 @@ class Game:
         return self.players[self.current_player_index]
 
 
-def start_game(game: Game) -> tuple[Game, list[Event], list[Choice]]:
-    game.turn_phase = TurnPhase.AWAIT_CHOICE
+def _build_turn_choices(game: Game) -> list[Choice]:
     player = game.current_player()
-    choices = [RollDiceChoice(player_id=player.id)]
+
+    if player.in_jail:
+        tile = game.board.get_tile(player.position)
+        if not isinstance(tile, JailTile):
+            raise ValueError("Player is in jail but not on a JailTile")
+        choices: list[Choice] = [
+            PayFineChoice(player_id=player.id, fine=tile.fine),
+            TryDoublesJailChoice(player_id=player.id),
+        ]
+        if any(isinstance(card, GetOutOfJailFreeCard) for card in player.cards):
+            choices.append(UseGetOutOfJailFreeCardChoice(player_id=player.id))
+    else:
+        choices = [RollDiceChoice(player_id=player.id)]
+
     for p in game.players:
         if p.id != player.id and not p.bankrupt:
-            choices.append(
-                MakeTradeOfferChoice(player_id=player.id, receiving_player_id=p.id)
-            )
-    # Add buy improvement choices for properties that can be improved
-    for tile in game.board.tiles:
-        if isinstance(tile, StreetTile):
-            if tile.owner == player.id:
-                group_tiles = game.board.get_group_tiles(tile.group_id)
-                if all(t.owner == player.id for t in group_tiles):
-                    if tile.improvement_level < len(tile.rent_schedule) - 1:
-                        choices.append(
-                            BuyImprovementChoice(
-                                player_id=player.id,
-                                tile_position=game.board.tiles.index(tile),
-                            )
+            choices.append(MakeTradeOfferChoice(player_id=player.id, receiving_player_id=p.id))
+
+    for pos, tile in enumerate(game.board.tiles):
+        if isinstance(tile, StreetTile) and tile.owner == player.id:
+            group_tiles = game.board.get_group_tiles(tile.group_id)
+            if all(t.owner == player.id for t in group_tiles):
+                if tile.improvement_level < len(tile.rent_schedule) - 1:
+                    improvement_price = (
+                        tile.improvement_prices
+                        if isinstance(tile.improvement_prices, int)
+                        else tile.improvement_prices[tile.improvement_level]
+                    )
+                    choices.append(
+                        BuyImprovementChoice(
+                            player_id=player.id,
+                            property_position=pos,
+                            price=improvement_price,
                         )
-                    if tile.improvement_level > 0:
-                        choices.append(
-                            SellImprovementChoice(
-                                player_id=player.id,
-                                tile_position=game.board.tiles.index(tile),
-                            )
+                    )
+                if tile.improvement_level > 0:
+                    last_improvement_price = (
+                        tile.improvement_prices
+                        if isinstance(tile.improvement_prices, int)
+                        else tile.improvement_prices[tile.improvement_level - 1]
+                    )
+                    improvement_sell_price = int(
+                        last_improvement_price * tile.improvement_sell_price_multiplier
+                    )
+                    choices.append(
+                        SellImprovementChoice(
+                            player_id=player.id,
+                            property_position=pos,
+                            price=improvement_sell_price,
                         )
+                    )
+
         if isinstance(tile, OwnableTile):
+            if isinstance(tile, StreetTile) and tile.improvement_level > 0:
+                continue  # Can't mortgage if there are improvements
             if tile.owner == player.id and not tile.mortgaged:
                 choices.append(
                     MortgagePropertyChoice(
                         player_id=player.id,
-                        property_position=game.board.tiles.index(tile),
+                        property_position=pos,
                         mortgage_value=tile.price // 2,
                     )
                 )
@@ -87,36 +114,23 @@ def start_game(game: Game) -> tuple[Game, list[Event], list[Choice]]:
                 choices.append(
                     UnmortgagePropertyChoice(
                         player_id=player.id,
-                        property_position=game.board.tiles.index(tile),
-                        mortgage_value=int(tile.price * 0.55),
+                        property_position=pos,
+                        unmortgage_value=int(tile.price * 0.55),
                     )
                 )
-    return game, [], choices
+
+    return choices
+
+
+def start_game(game: Game) -> tuple[Game, list[Event], list[Choice]]:
+    game.turn_phase = TurnPhase.AWAIT_CHOICE
+    return game, [], _build_turn_choices(game)
 
 
 def end_turn(game: Game) -> tuple[Game, list[Event], list[Choice]]:
     game.current_player_index = (game.current_player_index + 1) % len(game.players)
     game.turn_phase = TurnPhase.AWAIT_CHOICE
-    player = game.current_player()
-    if player.in_jail:
-        tile = game.board.get_tile(player.position)
-        if not isinstance(tile, JailTile):
-            raise ValueError("Player is in jail but not on a JailTile")
-        else:
-            choices = [
-                PayFineChoice(player_id=player.id, fine=tile.fine),
-                TryDoublesJailChoice(player_id=player.id),
-            ]
-            if any(isinstance(card, GetOutOfJailFreeCard) for card in player.cards):
-                choices.append(UseGetOutOfJailFreeCardChoice(player_id=player.id))
-    else:
-        choices = [RollDiceChoice(player_id=player.id)]
-    for p in game.players:
-        if p.id != player.id and not p.bankrupt:
-            choices.append(
-                MakeTradeOfferChoice(player_id=player.id, receiving_player_id=p.id)
-            )
-    return game, [], choices
+    return game, [], _build_turn_choices(game)
 
 
 def apply_command(game: Game, choice: Choice) -> tuple[Game, list[Event], list[Choice]]:

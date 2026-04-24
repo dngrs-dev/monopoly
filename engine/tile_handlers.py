@@ -9,6 +9,8 @@ from engine.tiles import (
     StreetTile,
     RailroadTile,
     UtilityTile,
+    NoneTile,
+    PayTile,
 )
 from engine.game import Game, TurnPhase
 from engine.events import (
@@ -19,6 +21,7 @@ from engine.events import (
     PlayerWentToJail,
     MoveReason,
     PlayerMoved,
+    PlayerPaidFine,
 )
 from engine.choices import Choice, BuyPropertyChoice, DeclineBuyPropertyChoice
 from engine.player import Player
@@ -185,5 +188,39 @@ def _(
     choices: list[Choice] = []
 
     # For other tile types, just end turn
+    game.turn_phase = TurnPhase.END_TURN
+    return game, events, choices
+
+
+@resolve_tile.register
+def _(
+    tile: NoneTile, game: Game, max_chain: int = 10
+) -> tuple[Game, list[Event], list[Choice]]:
+    player = game.current_player()
+    events: list[Event] = [_landing_event(player, tile)]
+    choices: list[Choice] = []
+
+    # Just end turn, no action
+    game.turn_phase = TurnPhase.END_TURN
+    return game, events, choices
+
+
+@resolve_tile.register
+def _(
+    tile: PayTile, game: Game, max_chain: int = 10
+) -> tuple[Game, list[Event], list[Choice]]:
+    player = game.current_player()
+    events: list[Event] = [_landing_event(player, tile)]
+    choices: list[Choice] = []
+
+    # Pay the specified amount
+    player.update_balance(-tile.amount)
+    events.append(
+        PlayerPaidFine(
+            player_id=player.id,
+            amount=tile.amount,
+        )
+    )
+
     game.turn_phase = TurnPhase.END_TURN
     return game, events, choices

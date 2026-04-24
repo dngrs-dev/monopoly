@@ -18,7 +18,7 @@ from engine.choices import (
     MortgagePropertyChoice,
     UnmortgagePropertyChoice,
 )
-from engine.game import Game, TurnPhase
+from engine.game import Game, TurnPhase, _build_turn_choices
 from engine.events import (
     Event,
     PlayerRolledDice,
@@ -594,21 +594,10 @@ def _(
         if isinstance(tile, OwnableTile):
             tile.owner = offering_player.id
 
-    events: list[Event] = []
-    choices: list[Choice] = []
-
-    player = game.current_player()
-    choices.append(RollDiceChoice(player_id=player.id))
-    for p in game.players:
-        if p.id != player.id and not p.bankrupt:
-            choices.append(
-                MakeTradeOfferChoice(player_id=player.id, receiving_player_id=p.id)
-            )
-
     # Clear the active trade offer
     game.trade_offer = None
 
-    return game, events, choices
+    return game, [], _build_turn_choices(game)
 
 
 @apply_choice.register
@@ -625,18 +614,7 @@ def _(
     # Clear the active trade offer
     game.trade_offer = None
 
-    events: list[Event] = []
-    choices: list[Choice] = []
-
-    player = game.current_player()
-    choices.append(RollDiceChoice(player_id=player.id))
-    for p in game.players:
-        if p.id != player.id and not p.bankrupt:
-            choices.append(
-                MakeTradeOfferChoice(player_id=player.id, receiving_player_id=p.id)
-            )
-
-    return game, events, choices
+    return game, [], _build_turn_choices(game)
 
 
 @apply_choice.register
@@ -649,9 +627,9 @@ def _(
     choices: list[Choice] = []
 
     player = game.current_player()
-    tile = game.board.get_tile(player.position)
+    tile = game.board.get_tile(choice.property_position)
     if not isinstance(tile, StreetTile):
-        raise ValueError("Current tile is not a street property")
+        raise ValueError("Tile at position is not a street property")
     if tile.owner != player.id:
         raise ValueError("Player does not own this property")
     if tile.improvement_level >= len(tile.rent_schedule) - 1:
@@ -683,7 +661,7 @@ def _(
 
     tile.rent = _calculate_rent(tile, game)  # Update rent after improvement
 
-    return game, events, choices
+    return game, events, _build_turn_choices(game)
 
 
 @apply_choice.register
@@ -696,9 +674,9 @@ def _(
     choices: list[Choice] = []
 
     player = game.current_player()
-    tile = game.board.get_tile(player.position)
+    tile = game.board.get_tile(choice.property_position)
     if not isinstance(tile, StreetTile):
-        raise ValueError("Current tile is not a street property")
+        raise ValueError("Tile at position is not a street property")
     if tile.owner != player.id:
         raise ValueError("Player does not own this property")
     if tile.improvement_level <= 0:
@@ -727,7 +705,7 @@ def _(
     
     tile.rent = _calculate_rent(tile, game)  # Update rent after selling improvement
 
-    return game, events, choices
+    return game, events, _build_turn_choices(game)
 
 
 @apply_choice.register
@@ -743,6 +721,8 @@ def _(
     tile = game.board.get_tile(choice.property_position)
     if not isinstance(tile, OwnableTile):
         raise ValueError("Tile at position is not a property")
+    if isinstance(tile, StreetTile) and tile.improvement_level > 0:
+        raise ValueError("Cannot mortgage a street with improvements")
     if tile.owner != player.id:
         raise ValueError("Player does not own this property")
     if tile.mortgaged:
@@ -759,7 +739,7 @@ def _(
             mortgage_value=mortgage_value,
         )
     )
-    return game, events, choices
+    return game, events, _build_turn_choices(game)
 
 
 @apply_choice.register
@@ -779,19 +759,19 @@ def _(
         raise ValueError("Player does not own this property")
     if not tile.mortgaged:
         raise ValueError("Property is not mortgaged")
-    mortgage_value = int(tile.price * 0.55)
-    if choice.mortgage_value != mortgage_value:
+    unmortgage_value = int(tile.price * 0.55)
+    if choice.unmortgage_value != unmortgage_value:
         raise ValueError("Offer price does not match unmortgage value")
-    if player.balance < mortgage_value:
+    if player.balance < unmortgage_value:
         raise ValueError("Player cannot afford to unmortgage this property")
-    player.update_balance(-mortgage_value)
+    player.update_balance(-unmortgage_value)
     tile.mortgaged = False
     events.append(
         PlayerUnmortgagedProperty(
             player_id=player.id,
             property_name=tile.name,
-            unmortgage_value=mortgage_value,
+            mortgage_value=unmortgage_value,
         )
     )
 
-    return game, events, choices
+    return game, events, _build_turn_choices(game)

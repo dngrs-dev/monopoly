@@ -139,3 +139,9 @@ class PlayerUnmortgagedProperty(Event):
     player_id: int
     property_name: str
     mortgage_value: int
+
+
+@dataclass
+class PlayerPaidFine(Event):
+    player_id: int
+    amount: int
