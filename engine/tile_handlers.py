@@ -100,10 +100,7 @@ def _calculate_rent(tile: OwnableTile, game: Game) -> int:
         owned_count = sum(1 for t in group_tiles if t.owner == tile.owner)
         return tile.rent_schedule[owned_count - 1] if owned_count > 0 else 0
     elif isinstance(tile, UtilityTile):
-        group_tiles = game.board.get_group_tiles(tile.group_id)
-        # TODO: This should be based on dice roll, not a fixed multiplier
-        owned_count = sum(1 for t in group_tiles if t.owner == tile.owner)
-        return tile.rent_multiplier * owned_count if owned_count > 0 else 0
+        return tile.rent_multiplier * game.dice.last_roll
     else:
         return tile.rent
 
