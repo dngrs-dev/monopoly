@@ -17,8 +17,10 @@ from engine.choices import (
     SellImprovementChoice,
     MortgagePropertyChoice,
     UnmortgagePropertyChoice,
+    PayPendingPaymentChoice,
+    DeclareBankruptcyChoice,
 )
-from engine.game import Game, TurnPhase, _build_turn_choices
+from engine.game import Game, TurnPhase, build_available_choices
 from engine.events import (
     Event,
     PlayerRolledDice,
@@ -34,6 +36,9 @@ from engine.events import (
     PlayerSoldImprovement,
     PlayerMortgagedProperty,
     PlayerUnmortgagedProperty,
+    PlayerPaidRent,
+    PlayerPaidFine,
+    PlayerPaidMoney,
 )
 from engine.tiles import OwnableTile, StreetTile
 from engine.tile_handlers import resolve_tile, _calculate_rent
@@ -69,8 +74,32 @@ def _assert_turn(game: Game, player_id: int, choice: Choice):
     if game.auction is not None:
         raise ValueError("Auction is active; only auction choices are allowed")
 
+    if game.pending_payment is not None:
+        if player_id != game.pending_payment.debtor_player_id:
+            raise ValueError("Only the debtor may act while a payment is pending")
+        if not isinstance(
+            choice,
+            (
+                MortgagePropertyChoice,
+                SellImprovementChoice,
+                PayPendingPaymentChoice,
+                DeclareBankruptcyChoice,
+            ),
+        ):
+            raise ValueError(
+                "A payment is pending; only mortgage/sell/pay/bankruptcy choices are allowed"
+            )
+        return
+
     if game.current_player().id != player_id:
         raise ValueError("It's not the player's turn")
+
+
+def _get_player_by_id(game: Game, player_id: int):
+    player = next((p for p in game.players if p.id == player_id), None)
+    if player is None:
+        raise ValueError("Player not found")
+    return player
 
 
 @singledispatch
@@ -597,7 +626,7 @@ def _(
     # Clear the active trade offer
     game.trade_offer = None
 
-    return game, [], _build_turn_choices(game)
+    return game, [], build_available_choices(game)
 
 
 @apply_choice.register
@@ -614,7 +643,7 @@ def _(
     # Clear the active trade offer
     game.trade_offer = None
 
-    return game, [], _build_turn_choices(game)
+    return game, [], build_available_choices(game)
 
 
 @apply_choice.register
@@ -624,7 +653,6 @@ def _(
     _assert_turn(game, choice.player_id, choice)
 
     events: list[Event] = []
-    choices: list[Choice] = []
 
     player = game.current_player()
     tile = game.board.get_tile(choice.property_position)
@@ -643,10 +671,12 @@ def _(
         raise ValueError("Offer price does not match improvement price")
     if player.balance < improvement_price:
         raise ValueError("Player cannot afford this improvement")
-    
+
     group_tiles = game.board.get_group_tiles(tile.group_id)
     if any(t.owner != player.id for t in group_tiles):
-        raise ValueError("Player must own all properties in the group to buy improvements")
+        raise ValueError(
+            "Player must own all properties in the group to buy improvements"
+        )
 
     player.update_balance(-improvement_price)
     tile.improvement_level += 1
@@ -661,7 +691,7 @@ def _(
 
     tile.rent = _calculate_rent(tile, game)  # Update rent after improvement
 
-    return game, events, _build_turn_choices(game)
+    return game, events, build_available_choices(game)
 
 
 @apply_choice.register
@@ -671,7 +701,6 @@ def _(
     _assert_turn(game, choice.player_id, choice)
 
     events: list[Event] = []
-    choices: list[Choice] = []
 
     player = game.current_player()
     tile = game.board.get_tile(choice.property_position)
@@ -702,10 +731,10 @@ def _(
             price=improvement_sell_price,
         )
     )
-    
+
     tile.rent = _calculate_rent(tile, game)  # Update rent after selling improvement
 
-    return game, events, _build_turn_choices(game)
+    return game, events, build_available_choices(game)
 
 
 @apply_choice.register
@@ -715,7 +744,6 @@ def _(
     _assert_turn(game, choice.player_id, choice)
 
     events: list[Event] = []
-    choices: list[Choice] = []
 
     player = game.current_player()
     tile = game.board.get_tile(choice.property_position)
@@ -739,7 +767,7 @@ def _(
             mortgage_value=mortgage_value,
         )
     )
-    return game, events, _build_turn_choices(game)
+    return game, events, build_available_choices(game)
 
 
 @apply_choice.register
@@ -749,7 +777,6 @@ def _(
     _assert_turn(game, choice.player_id, choice)
 
     events: list[Event] = []
-    choices: list[Choice] = []
 
     player = game.current_player()
     tile = game.board.get_tile(choice.property_position)
@@ -774,4 +801,106 @@ def _(
         )
     )
 
-    return game, events, _build_turn_choices(game)
+    return game, events, build_available_choices(game)
+
+
+@apply_choice.register
+def _(
+    choice: PayPendingPaymentChoice, game: Game
+) -> tuple[Game, list[Event], list[Choice]]:
+    _assert_turn(game, choice.player_id, choice)
+
+    pending = game.pending_payment
+    if pending is None:
+        raise ValueError("No pending payment")
+    if pending.debtor_player_id != choice.player_id:
+        raise ValueError("Only the debtor can pay the pending payment")
+    if choice.amount != pending.amount:
+        raise ValueError("Payment amount does not match pending payment")
+
+    debtor = game.current_player()
+    if debtor.balance < pending.amount:
+        raise ValueError("Debtor cannot afford the pending payment")
+
+    debtor.update_balance(-pending.amount)
+
+    if pending.creditor_player_id is not None:
+        creditor = _get_player_by_id(game, pending.creditor_player_id)
+        creditor.update_balance(pending.amount)
+
+    events: list[Event] = []
+    if pending.reason == "rent":
+        events.append(
+            PlayerPaidRent(
+                player_id=debtor.id,
+                to_player_id=pending.creditor_player_id,
+                property_name=pending.property_name or "(unknown)",
+                rent=pending.amount,
+            )
+        )
+    elif pending.reason == "fine":
+        events.append(PlayerPaidFine(player_id=debtor.id, amount=pending.amount))
+    else:
+        events.append(
+            PlayerPaidMoney(
+                player_id=debtor.id,
+                amount=-pending.amount,
+                reason=pending.reason or "pending_payment",
+            )
+        )
+
+    game.pending_payment = None
+    game.turn_phase = TurnPhase.END_TURN
+    return game, events, []
+
+
+@apply_choice.register
+def _(
+    choice: DeclareBankruptcyChoice, game: Game
+) -> tuple[Game, list[Event], list[Choice]]:
+    _assert_turn(game, choice.player_id, choice)
+
+    pending = game.pending_payment
+    if pending is None:
+        raise ValueError("No pending payment")
+    if pending.debtor_player_id != choice.player_id:
+        raise ValueError("Only the debtor can declare bankruptcy")
+
+    debtor = game.current_player()
+    debtor.bankrupt = True
+
+    # Transfer remaining cash and properties.
+    creditor_id = pending.creditor_player_id
+    if creditor_id is not None:
+        creditor = _get_player_by_id(game, creditor_id)
+        if debtor.balance > 0:
+            creditor.update_balance(debtor.balance)
+            debtor.balance = 0
+        for tile in game.board.tiles:
+            if isinstance(tile, OwnableTile) and tile.owner == debtor.id:
+                tile.owner = creditor.id
+        if debtor.cards:
+            creditor.cards.extend(debtor.cards)
+            debtor.cards.clear()
+    else:
+        # Bank: clear ownership.
+        for tile in game.board.tiles:
+            if isinstance(tile, OwnableTile) and tile.owner == debtor.id:
+                tile.owner = None
+                tile.mortgaged = False
+                if isinstance(tile, StreetTile):
+                    tile.improvement_level = 0
+        debtor.balance = 0
+        debtor.cards.clear()
+
+    game.pending_payment = None
+    game.turn_phase = TurnPhase.END_TURN
+
+    events: list[Event] = [
+        PlayerPaidMoney(
+            player_id=debtor.id,
+            amount=0,
+            reason="bankruptcy",
+        )
+    ]
+    return game, events, []

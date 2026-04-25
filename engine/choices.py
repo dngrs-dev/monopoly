@@ -104,3 +104,16 @@ class UnmortgagePropertyChoice(Choice):
     player_id: int
     property_position: int
     unmortgage_value: int
+
+
+@dataclass
+class PayPendingPaymentChoice(Choice):
+    player_id: int
+    amount: int
+    to_player_id: int | None = None  # None means "bank"
+    reason: str | None = None
+
+
+@dataclass
+class DeclareBankruptcyChoice(Choice):
+    player_id: int

@@ -26,6 +26,7 @@ def to_jsonable(obj: Any) -> Any:
         return {k: to_jsonable(v) for k, v in obj.items()}
     return obj
 
+
 def _require_int(payload: dict[str, Any], key: str) -> int:
     if key not in payload:
         raise IllegalCommand(f"Missing required key '{key}' in payload")
@@ -33,6 +34,7 @@ def _require_int(payload: dict[str, Any], key: str) -> int:
     if not isinstance(value, int):
         raise IllegalCommand(f"Expected integer for key '{key}' in payload")
     return value
+
 
 def _require_int_list(payload: dict[str, Any], key: str) -> list[int]:
     if key not in payload:
@@ -70,6 +72,11 @@ class GameSession:
             "board_size": self.game.board.size(),
             "tiles": [to_jsonable(t) for t in self.game.board.tiles],
             "auction": to_jsonable(self.game.auction) if self.game.auction else None,
+            "pending_payment": (
+                to_jsonable(self.game.pending_payment)
+                if self.game.pending_payment
+                else None
+            ),
         }
 
     def apply_choice_id(
@@ -79,17 +86,21 @@ class GameSession:
             raise IllegalCommand("Unknown or expired choice_id")
 
         choice = self.choice_map[choice_id]
-        
+
         if isinstance(choice, SendTradeOfferChoice):
             if payload is None:
                 raise IllegalCommand("Missing payload for SendTradeOfferChoice")
-            
+
             choice = replace(
                 choice,
                 offered_money=_require_int(payload, "offered_money"),
                 requested_money=_require_int(payload, "requested_money"),
-                offered_properties_positions=_require_int_list(payload, "offered_properties_positions"),
-                requested_properties_positions=_require_int_list(payload, "requested_properties_positions"),
+                offered_properties_positions=_require_int_list(
+                    payload, "offered_properties_positions"
+                ),
+                requested_properties_positions=_require_int_list(
+                    payload, "requested_properties_positions"
+                ),
             )
 
         # Apply the engine command.

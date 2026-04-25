@@ -82,3 +82,11 @@ class Player:
 
     def update_balance(self, amount: int):
         self.balance += amount
+
+    def pay(self, amount: int) -> int:
+        if amount < 0:
+            raise ValueError("amount must be non-negative")
+
+        paid_amount = min(self.balance, amount)
+        self.balance -= paid_amount
+        return paid_amount

@@ -12,7 +12,7 @@ from engine.tiles import (
     NoneTile,
     PayTile,
 )
-from engine.game import Game, TurnPhase
+from engine.game import Game, TurnPhase, PendingPayment, build_available_choices
 from engine.events import (
     Event,
     PlayerLanded,
@@ -71,6 +71,18 @@ def _(
         game.turn_phase = TurnPhase.END_TURN
         return game, events, choices
     tile.rent = _calculate_rent(tile, game)  # Update tile with fresh rent
+
+    if player.balance < tile.rent:
+        game.pending_payment = PendingPayment(
+            debtor_player_id=player.id,
+            creditor_player_id=tile.owner,
+            amount=tile.rent,
+            reason="rent",
+            property_name=tile.name,
+        )
+        game.turn_phase = TurnPhase.AWAIT_CHOICE
+        return game, events, build_available_choices(game)
+
     player.update_balance(-tile.rent)
     owner = next((p for p in game.players if p.id == tile.owner), None)
     if owner is not None:
@@ -213,14 +225,20 @@ def _(
     events: list[Event] = [_landing_event(player, tile)]
     choices: list[Choice] = []
 
+    if player.balance < tile.amount:
+        game.pending_payment = PendingPayment(
+            debtor_player_id=player.id,
+            creditor_player_id=None,
+            amount=tile.amount,
+            reason="fine",
+            property_name=tile.name,
+        )
+        game.turn_phase = TurnPhase.AWAIT_CHOICE
+        return game, events, build_available_choices(game)
+
     # Pay the specified amount
     player.update_balance(-tile.amount)
-    events.append(
-        PlayerPaidFine(
-            player_id=player.id,
-            amount=tile.amount,
-        )
-    )
+    events.append(PlayerPaidFine(player_id=player.id, amount=tile.amount))
 
     game.turn_phase = TurnPhase.END_TURN
     return game, events, choices
