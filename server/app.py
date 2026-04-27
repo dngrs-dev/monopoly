@@ -5,8 +5,6 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
-from uuid import uuid4
-
 from fastapi import (
     FastAPI,
     WebSocket,
@@ -21,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
+from starlette.concurrency import run_in_threadpool
 
 from engine.board import Board
 from engine.dice import Dice
@@ -39,6 +38,7 @@ from engine.rules import Rules
 
 from server.session import GameSession, IllegalCommand
 from server.protocol import is_join, is_choose
+from server.auth_db import AuthDb, User, normalize_email
 
 
 load_dotenv()
@@ -50,52 +50,42 @@ JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7  # 7 days
 COOKIE_SECURE = os.getenv("MONOPOLY_COOKIE_SECURE", "0") == "1"
 
-users_lock = asyncio.Lock()
-user_ids_by_username: dict[str, str] = {}
-
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _make_token(*, user_id: str, username: str) -> str:
+def _make_token(*, user_id: str) -> str:
     now = _utcnow()
     payload = {
         "sub": user_id,
-        "username": username,
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(seconds=ACCESS_TOKEN_TTL_SECONDS)).timestamp()),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
-def _parse_token(token: str) -> dict[str, str] | None:
+def _parse_token(token: str) -> str | None:
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
     except JWTError:
         return None
 
     user_id = payload.get("sub")
-    username = payload.get("username")
-    if not isinstance(user_id, str) or not isinstance(username, str):
+    if not isinstance(user_id, str):
         return None
 
-    return {"user_id": user_id, "username": username}
+    return user_id
 
 
-async def _get_or_create_user(username: str) -> str:
-    async with users_lock:
-        existing = user_ids_by_username.get(username)
-        if existing:
-            return existing
-        uid = uuid4().hex
-        user_ids_by_username[username] = uid
-        return uid
-
-
-def _require_user_http(request: Request) -> dict[str, str]:
+async def _require_user_http(request: Request) -> User:
     token = request.cookies.get(COOKIE_NAME)
-    user = _parse_token(token) if token else None
+    user_id = _parse_token(token) if token else None
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
+        )
+    user = await run_in_threadpool(auth_db.get_user_by_id, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
@@ -103,17 +93,75 @@ def _require_user_http(request: Request) -> dict[str, str]:
     return user
 
 
-def _require_user_ws(ws: WebSocket) -> dict[str, str]:
+async def _require_user_ws(ws: WebSocket) -> User | None:
     token = ws.cookies.get(COOKIE_NAME)
-    return _parse_token(token) if token else None
+    user_id = _parse_token(token) if token else None
+    if not user_id:
+        return None
+    return await run_in_threadpool(auth_db.get_user_by_id, user_id)
+
+
+def _validate_email(value: str) -> str:
+    email = normalize_email(value)
+    if not (3 <= len(email) <= 320):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email"
+        )
+    if "@" not in email or email.startswith("@") or email.endswith("@"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email"
+        )
+    return email
+
+
+def _validate_password(value: str) -> str:
+    if not isinstance(value, str):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid password"
+        )
+    if not (8 <= len(value) <= 256):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be between 8 and 256 characters",
+        )
+    return value
+
+
+def _validate_username(value: str) -> str:
+    username = value.strip()
+    if not (1 <= len(username) <= 32):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username must be between 1 and 32 characters",
+        )
+    return username
+
+
+class RegisterIn(BaseModel):
+    email: str
+    password: str
 
 
 class LoginIn(BaseModel):
+    email: str
+    password: str
+
+
+class UpdateUsernameIn(BaseModel):
     username: str
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _WEB_DIR = _REPO_ROOT / "clients" / "web"
+
+DB_PATH = os.getenv("MONOPOLY_DB_PATH", str(_REPO_ROOT / ".data" / "monopoly.db"))
+auth_db = AuthDb(DB_PATH)
+
+
+@app.on_event("startup")
+def _startup() -> None:
+    auth_db.init()
+
 
 app.mount("/static", StaticFiles(directory=str(_WEB_DIR), html=True), name="web")
 
@@ -137,17 +185,48 @@ async def game_page() -> FileResponse:
     return FileResponse(_WEB_DIR / "game" / "index.html")
 
 
+@app.post("/api/auth/register", status_code=status.HTTP_201_CREATED)
+async def register(data: RegisterIn, response: Response):
+    email = _validate_email(data.email)
+    password = _validate_password(data.password)
+
+    try:
+        user = await run_in_threadpool(auth_db.create_user, email=email, password=password)
+    except ValueError as e:
+        message = str(e)
+        conflict = "already exists" in message.lower()
+        code = status.HTTP_409_CONFLICT if conflict else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=message) from e
+
+    token = _make_token(user_id=user.id)
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=token,
+        httponly=True,
+        samesite="lax",
+        secure=COOKIE_SECURE,
+        max_age=ACCESS_TOKEN_TTL_SECONDS,
+        path="/",
+    )
+
+    return {
+        "ok": True,
+        "user": {"user_id": user.id, "username": user.username, "email": user.email},
+    }
+
+
 @app.post("/api/auth/login")
 async def login(data: LoginIn, response: Response):
-    username = data.username.strip()
-    if not (1 <= len(username) <= 32):
+    email = _validate_email(data.email)
+    password = _validate_password(data.password)
+
+    user = await run_in_threadpool(auth_db.authenticate, email=email, password=password)
+    if not user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username must be between 1 and 32 characters",
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
         )
 
-    user_id = await _get_or_create_user(username)
-    token = _make_token(user_id=user_id, username=username)
+    token = _make_token(user_id=user.id)
 
     response.set_cookie(
         key=COOKIE_NAME,
@@ -158,13 +237,40 @@ async def login(data: LoginIn, response: Response):
         max_age=ACCESS_TOKEN_TTL_SECONDS,
         path="/",
     )
-    return {"ok": True, "user": {"user_id": user_id, "username": username}}
+    return {
+        "ok": True,
+        "user": {"user_id": user.id, "username": user.username, "email": user.email},
+    }
 
 
 @app.get("/api/auth/me")
 async def auth_me(request: Request):
-    user = _require_user_http(request)
-    return {"user_id": user["user_id"], "username": user["username"]}
+    user = await _require_user_http(request)
+    return {"user_id": user.id, "username": user.username, "email": user.email}
+
+
+@app.post("/api/auth/username")
+async def update_username(data: UpdateUsernameIn, request: Request):
+    user = await _require_user_http(request)
+    username = _validate_username(data.username)
+    try:
+        updated = await run_in_threadpool(
+            auth_db.update_username, user_id=user.id, username=username
+        )
+    except ValueError as e:
+        message = str(e)
+        conflict = "already exists" in message.lower()
+        code = status.HTTP_409_CONFLICT if conflict else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=message) from e
+
+    return {
+        "ok": True,
+        "user": {
+            "user_id": updated.id,
+            "username": updated.username,
+            "email": updated.email,
+        },
+    }
 
 
 @app.post("/api/auth/logout")
@@ -240,7 +346,7 @@ async def broadcast(room: dict[str, Any], payload: dict[str, Any]) -> None:
 
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
-    user = _require_user_ws(ws)
+    user = await _require_user_ws(ws)
     if not user:
         await ws.close(code=1008)
         return
@@ -266,15 +372,15 @@ async def ws_endpoint(ws: WebSocket):
                     user_to_player: dict[str, int] = joined_room["user_to_player"]
                     player_to_user: dict[int, str] = joined_room["player_to_user"]
 
-                    if user["user_id"] in user_to_player:
-                        player_id = user_to_player[user["user_id"]]
+                    if user.id in user_to_player:
+                        player_id = user_to_player[user.id]
                     else:
                         taken = set(player_to_user.keys())
                         free = [p.id for p in session.game.players if p.id not in taken]
                         if free:
                             player_id = free[0]
-                            user_to_player[user["user_id"]] = player_id
-                            player_to_user[player_id] = user["user_id"]
+                            user_to_player[user.id] = player_id
+                            player_to_user[player_id] = user.id
                         else:
                             player_id = None  # spectator
 
@@ -283,8 +389,8 @@ async def ws_endpoint(ws: WebSocket):
                         "type": "joined",
                         "room_id": room_id,
                         "you": {
-                            "user_id": user["user_id"],
-                            "username": user["username"],
+                            "user_id": user.id,
+                            "username": user.username,
                             "player_id": player_id,
                             "role": "player" if player_id is not None else "spectator",
                         },

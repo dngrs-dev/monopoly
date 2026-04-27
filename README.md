@@ -34,7 +34,7 @@ Web demo:
 ## What’s incomplete
 
 - Not a full Monopoly ruleset (mortgaging, bankruptcy rules, etc.).
-- No authentication/permissions in the demo: any connected tab can click choices.
+- Authentication is basic (email/password + cookie) and there’s no email verification/password reset.
 - State is in-memory only: restarting the server resets rooms.
 
 ## Requirements

@@ -10,13 +10,32 @@
 
     <form id="loginForm">
       <label>
-        Username
-        <input id="username" autocomplete="username" />
+        Email
+        <input id="email" type="email" autocomplete="email" required />
       </label>
-      <button type="submit">Login</button>
+
+      <label>
+        Password
+        <input
+          id="password"
+          type="password"
+          autocomplete="current-password"
+          required
+        />
+      </label>
+
+      <label>
+        <input id="isRegister" type="checkbox" /> Create account
+      </label>
+
+      <p id="registerHint" hidden>
+        Your username will be generated from your email (you can change it later).
+      </p>
+
+      <button id="submitBtn" type="submit">Login</button>
     </form>
 
-    <p id="err"></p>
+    <p id="err" role="alert"></p>
 
     <script src="/static/login/login.js"></script>
   </body>

@@ -6,9 +6,14 @@
     <title>Monopoly</title>
   </head>
   <body>
+    <p>Signed in as: <span id="current-user">(not signed in)</span></p>
+
     <button id="connect" disabled>Connect</button>
     <button id="login">Login</button>
-    <button id="logout">Logout</button>
+    <button id="logout" disabled>Logout</button>
+    <button id="change-username" disabled>Change username</button>
+
+    <p id="err" role="alert"></p>
 
     <script src="/static/ws_client.js"></script>
   </body>
