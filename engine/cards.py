@@ -41,4 +41,4 @@ class GetOutOfJailFreeCard(Card):
 
 @dataclass
 class MoveToNearestTileByTypeCard(Card):
-    tile_type: Tile
+    tile_type: type[Tile]

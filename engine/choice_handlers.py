@@ -40,15 +40,23 @@ from engine.events import (
     PlayerPaidFine,
     PlayerPaidMoney,
 )
-from engine.tiles import OwnableTile, StreetTile
+from engine.tiles import OwnableTile, StreetTile, JailTile
 from engine.tile_handlers import resolve_tile, _calculate_rent
 from engine.cards import GetOutOfJailFreeCard
 from engine.auction import Auction
 from engine.tradeoffer import TradeOffer
 
+def _street_group(game: Game, group_id: int):
+    return [t for t in game.board.get_group_tiles(group_id) if isinstance(t, StreetTile)]
+
+def _can_buy_improvement_evenly(tile: StreetTile, group: list[StreetTile]) -> bool:
+    return all(other.improvement_level >= tile.improvement_level for other in group if other is not tile)
+
+def _can_sell_improvement_evenly(tile: StreetTile, group: list[StreetTile]) -> bool:
+    return all(other.improvement_level <= tile.improvement_level for other in group if other is not tile)
 
 def _assert_turn(game: Game, player_id: int, choice: Choice):
-    print(f"Applying choice: {choice}")
+    # print(f"Applying choice: {choice}")
     if game.turn_phase != TurnPhase.AWAIT_CHOICE:
         raise ValueError("Not awaiting choice")
 
@@ -229,8 +237,13 @@ def _(choice: PayFineChoice, game: Game) -> tuple[Game, list[Event], list[Choice
     choices: list[Choice] = []
 
     player = game.current_player()
+    tile = game.board.get_tile(player.position)
     if not player.in_jail:
         raise ValueError("Player is not in jail")
+    if not isinstance(tile, JailTile):
+        raise ValueError("Player is not on a jail tile")
+    if choice.fine != tile.fine:
+        raise ValueError("Fine amount does not match tile fine")
     if player.balance < choice.fine:
         raise ValueError("Player cannot afford the fine")
 
@@ -672,11 +685,15 @@ def _(
     if player.balance < improvement_price:
         raise ValueError("Player cannot afford this improvement")
 
-    group_tiles = game.board.get_group_tiles(tile.group_id)
-    if any(t.owner != player.id for t in group_tiles):
-        raise ValueError(
-            "Player must own all properties in the group to buy improvements"
-        )
+    group = _street_group(game, tile.group_id)
+    if any(other.owner != player.id for other in group):
+        raise ValueError("Player does not own all properties in this group")
+    if any(t.mortgaged for t in group):
+        raise ValueError("Cannot improve while any property in the group is mortgaged")
+    if tile.mortgaged:
+        raise ValueError("Cannot improve a mortgaged property")
+    if game.rules.evenly_improve and not _can_buy_improvement_evenly(tile, group):
+        raise ValueError("Must improve evenly across the group")
 
     player.update_balance(-improvement_price)
     tile.improvement_level += 1
@@ -720,6 +737,9 @@ def _(
     )
     if choice.price != improvement_sell_price:
         raise ValueError("Offer price does not match improvement sell price")
+    
+    if game.rules.evenly_improve and not _can_sell_improvement_evenly(tile, _street_group(game, tile.group_id)):
+        raise ValueError("Must sell improvements evenly across the group")
 
     player.update_balance(improvement_sell_price)
     tile.improvement_level -= 1
@@ -749,8 +769,10 @@ def _(
     tile = game.board.get_tile(choice.property_position)
     if not isinstance(tile, OwnableTile):
         raise ValueError("Tile at position is not a property")
-    if isinstance(tile, StreetTile) and tile.improvement_level > 0:
-        raise ValueError("Cannot mortgage a street with improvements")
+    if isinstance(tile, StreetTile):
+        group = _street_group(game, tile.group_id)
+        if any(t.improvement_level > 0 for t in group):
+            raise ValueError("Cannot mortgage while there are improvements in the group")
     if tile.owner != player.id:
         raise ValueError("Player does not own this property")
     if tile.mortgaged:

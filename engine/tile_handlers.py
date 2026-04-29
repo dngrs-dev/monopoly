@@ -115,7 +115,10 @@ def _calculate_rent(tile: OwnableTile, game: Game) -> int:
         owned_count = sum(1 for t in group_tiles if t.owner == tile.owner)
         return tile.rent_schedule[owned_count - 1] if owned_count > 0 else 0
     elif isinstance(tile, UtilityTile):
-        return tile.rent_multiplier * game.dice.last_roll
+        utilities = [t for t in game.board.get_group_tiles(tile.group_id) if isinstance(t, UtilityTile)]
+        owned_count = sum(1 for t in utilities if t.owner == tile.owner)
+        multiplier = tile.rent_multiplier[min(owned_count - 1, len(tile.rent_multiplier) - 1)] if owned_count > 0 else 0
+        return multiplier * game.dice.last_roll
     else:
         return tile.rent
 

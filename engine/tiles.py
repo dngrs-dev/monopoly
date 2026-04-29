@@ -39,7 +39,7 @@ class RailroadTile(OwnableTile):
 @dataclass
 class UtilityTile(OwnableTile):
     group_id: int
-    rent_multiplier: int  # Multpblier based on dice roll
+    rent_multiplier: list[int] # index 0 - basic multiplier, other -> number of utilities owned by same player
 
 
 @dataclass
