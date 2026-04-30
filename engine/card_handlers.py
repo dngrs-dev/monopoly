@@ -9,6 +9,9 @@ from engine.cards import (
     GoToJailCard,
     GetOutOfJailFreeCard,
     MoveToNearestTileByTypeCard,
+    PayEachPlayerCard,
+    CollectFromEachPlayerCard,
+    PayPerImprovementCard,
 )
 from engine.events import (
     Event,
@@ -18,7 +21,7 @@ from engine.events import (
     MoveReason,
 )
 from engine.choices import Choice
-from engine.tiles import JailTile
+from engine.tiles import JailTile, StreetTile
 from engine.tile_handlers import resolve_tile
 
 
@@ -173,4 +176,86 @@ def _(card: MoveToNearestTileByTypeCard, game: Game) -> tuple[Game, list[Event],
     )
     events.extend(tile_events)
     choices.extend(tile_choices)
+    return game, events, choices
+
+
+@resolve_card.register
+def _(card: PayEachPlayerCard, game: Game) -> tuple[Game, list[Event], list[Choice]]:
+    player = game.current_player()
+    events: list[Event] = []
+    choices: list[Choice] = []
+    game.board.get_tile(player.position).deck.discard_card(card)
+
+    for other_player in game.players:
+        if other_player.id != player.id:
+            other_player.update_balance(card.amount)
+            player.update_balance(-card.amount)
+            events.append(
+                PlayerPaidMoney(
+                    player_id=player.id,
+                    amount=-card.amount,
+                    reason="card_pay_each_player",
+                )
+            )
+            events.append(
+                PlayerPaidMoney(
+                    player_id=other_player.id,
+                    amount=card.amount,
+                    reason="card_receive_from_each_player",
+                )
+            )
+
+    return game, events, choices
+
+@resolve_card.register
+def _(card: CollectFromEachPlayerCard, game: Game) -> tuple[Game, list[Event], list[Choice]]:
+    player = game.current_player()
+    events: list[Event] = []
+    choices: list[Choice] = []
+    game.board.get_tile(player.position).deck.discard_card(card)
+
+    for other_player in game.players:
+        if other_player.id != player.id:
+            other_player.update_balance(-card.amount)
+            player.update_balance(card.amount)
+            events.append(
+                PlayerPaidMoney(
+                    player_id=other_player.id,
+                    amount=-card.amount,
+                    reason="card_pay_each_player",
+                )
+            )
+            events.append(
+                PlayerPaidMoney(
+                    player_id=player.id,
+                    amount=card.amount,
+                    reason="card_receive_from_each_player",
+                )
+            )
+
+    return game, events, choices
+
+@resolve_card.register
+def _(card: PayPerImprovementCard, game: Game) -> tuple[Game, list[Event], list[Choice]]:
+    player = game.current_player()
+    events: list[Event] = []
+    choices: list[Choice] = []
+    game.board.get_tile(player.position).deck.discard_card(card)
+
+    total_payment = 0
+    for tile in game.board.tiles:
+        if isinstance(tile, StreetTile) and tile.owner == player.id:
+            level = min(tile.improvement_level, len(card.amount) - 1)
+            payment = card.amount[level]
+            total_payment += payment
+
+    player.update_balance(-total_payment)
+    events.append(
+        PlayerPaidMoney(
+            player_id=player.id,
+            amount=-total_payment,
+            reason="card_pay_per_improvement",
+        )
+    )
+
     return game, events, choices

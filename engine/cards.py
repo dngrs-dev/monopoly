@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-
 if TYPE_CHECKING:
     from engine.deck import Deck
     from engine.tiles import Tile
@@ -42,3 +41,20 @@ class GetOutOfJailFreeCard(Card):
 @dataclass
 class MoveToNearestTileByTypeCard(Card):
     tile_type: type[Tile]
+
+
+@dataclass
+class PayEachPlayerCard(Card):
+    amount: int
+
+
+@dataclass
+class CollectFromEachPlayerCard(Card):
+    amount: int
+
+
+@dataclass
+class PayPerImprovementCard(Card):
+    amount: list[
+        int
+    ]  # index = level of improvement, value = amount to pay for that level
