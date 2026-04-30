@@ -30,7 +30,7 @@ from engine.cards import GetOutOfJailFreeCard
 
 def _landing_event(player: Player, tile: Tile) -> PlayerLanded:
     return PlayerLanded(
-        player_id=player.id, position=player.position, tile_name=tile.name
+        player_id=player.id, position=player.position
     )
 
 
@@ -56,7 +56,7 @@ def _(
             return game, events, choices
         choices.append(
             BuyPropertyChoice(
-                player_id=player.id, property_name=tile.name, price=tile.price
+                player_id=player.id, property_position=game.board.get_tile_position(tile), price=tile.price
             )
         )
         choices.append(DeclineBuyPropertyChoice(player_id=player.id))
@@ -78,7 +78,7 @@ def _(
             creditor_player_id=tile.owner,
             amount=tile.rent,
             reason="rent",
-            property_name=tile.name,
+            property_position=game.board.get_tile_position(tile),
         )
         game.turn_phase = TurnPhase.AWAIT_CHOICE
         return game, events, build_available_choices(game)
@@ -91,7 +91,7 @@ def _(
         PlayerPaidRent(
             player_id=player.id,
             to_player_id=tile.owner,
-            property_name=tile.name,
+            property_position=game.board.get_tile_position(tile),
             rent=tile.rent,
         )
     )
@@ -234,7 +234,7 @@ def _(
             creditor_player_id=None,
             amount=tile.amount,
             reason="fine",
-            property_name=tile.name,
+            property_position=game.board.get_tile_position(tile),
         )
         game.turn_phase = TurnPhase.AWAIT_CHOICE
         return game, events, build_available_choices(game)

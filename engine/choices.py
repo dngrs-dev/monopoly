@@ -14,7 +14,7 @@ class DeclineBuyPropertyChoice(Choice):
 @dataclass
 class BuyPropertyChoice(Choice):
     player_id: int
-    property_name: str
+    property_position: int
     price: int
 
 

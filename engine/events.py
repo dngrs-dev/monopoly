@@ -11,7 +11,6 @@ class Event:
 class PlayerLanded(Event):
     player_id: int
     position: int
-    tile_name: str
 
 
 @dataclass
@@ -29,7 +28,7 @@ class PlayerLandedOnStart(Event):
 @dataclass
 class PlayerBoughtProperty(Event):
     player_id: int
-    property_name: str
+    property_position: int
     price: int
 
 
@@ -37,7 +36,7 @@ class PlayerBoughtProperty(Event):
 class PlayerPaidRent(Event):
     player_id: int
     to_player_id: int
-    property_name: str
+    property_position: int
     rent: int
 
 
@@ -114,7 +113,7 @@ class AuctionStarted(Event):
 @dataclass
 class PlayerBoughtImprovement(Event):
     player_id: int
-    property_name: str
+    property_position: int
     improvement_level: int
     price: int
 
@@ -122,7 +121,7 @@ class PlayerBoughtImprovement(Event):
 @dataclass
 class PlayerSoldImprovement(Event):
     player_id: int
-    property_name: str
+    property_position: int
     improvement_level: int
     price: int
 
@@ -130,14 +129,14 @@ class PlayerSoldImprovement(Event):
 @dataclass
 class PlayerMortgagedProperty(Event):
     player_id: int
-    property_name: str
+    property_position: int
     mortgage_value: int
 
 
 @dataclass
 class PlayerUnmortgagedProperty(Event):
     player_id: int
-    property_name: str
+    property_position: int
     mortgage_value: int
 
 

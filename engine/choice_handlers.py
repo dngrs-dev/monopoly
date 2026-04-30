@@ -169,14 +169,15 @@ def _(choice: BuyPropertyChoice, game: Game) -> tuple[Game, list[Event], list[Ch
         raise ValueError("Player cannot afford this property")
     if tile.price != choice.price:
         raise ValueError("Offer price does not match property price")
-    if tile.name != choice.property_name:
-        raise ValueError("Property name does not match current tile")
+    pos = game.board.get_tile_position(choice.property_position)
+    if game.board.get_tile(choice.property_position) != tile:
+        raise ValueError("Property position does not match current tile")
 
     player.update_balance(-tile.price)
     tile.owner = player.id
     events.append(
         PlayerBoughtProperty(
-            player_id=player.id, property_name=tile.name, price=tile.price
+            player_id=player.id, property_position=pos, price=tile.price
         )
     )
     game.turn_phase = TurnPhase.END_TURN
@@ -390,7 +391,7 @@ def _(choice: AuctionBidChoice, game: Game) -> tuple[Game, list[Event], list[Cho
         events.append(
             PlayerBoughtProperty(
                 player_id=winning_player_id,
-                property_name=tile.name,
+                property_position=auction.tile_position,
                 price=winning_bid,
             )
         )
@@ -462,7 +463,7 @@ def _(choice: AuctionPassChoice, game: Game) -> tuple[Game, list[Event], list[Ch
         events.append(
             PlayerBoughtProperty(
                 player_id=winning_player_id,
-                property_name=tile.name,
+                property_position=auction.tile_position,
                 price=winning_bid,
             )
         )
@@ -700,7 +701,7 @@ def _(
     events.append(
         PlayerBoughtImprovement(
             player_id=player.id,
-            property_name=tile.name,
+            property_position=choice.property_position,
             improvement_level=tile.improvement_level,
             price=improvement_price,
         )
@@ -746,7 +747,7 @@ def _(
     events.append(
         PlayerSoldImprovement(
             player_id=player.id,
-            property_name=tile.name,
+            property_position=choice.property_position,
             improvement_level=tile.improvement_level,
             price=improvement_sell_price,
         )
@@ -785,7 +786,7 @@ def _(
     events.append(
         PlayerMortgagedProperty(
             player_id=player.id,
-            property_name=tile.name,
+            property_position=choice.property_position,
             mortgage_value=mortgage_value,
         )
     )
@@ -818,7 +819,7 @@ def _(
     events.append(
         PlayerUnmortgagedProperty(
             player_id=player.id,
-            property_name=tile.name,
+            property_position=choice.property_position,
             mortgage_value=unmortgage_value,
         )
     )
@@ -856,7 +857,7 @@ def _(
             PlayerPaidRent(
                 player_id=debtor.id,
                 to_player_id=pending.creditor_player_id,
-                property_name=pending.property_name or "(unknown)",
+                property_position=pending.property_position,
                 rent=pending.amount,
             )
         )

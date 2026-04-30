@@ -78,7 +78,7 @@ def test_mortgage_then_pay_pending_rent_transfers_money_and_clears_pending_payme
         isinstance(e, PlayerPaidRent)
         and e.player_id == 1
         and e.to_player_id == 2
-        and e.property_name == "A"
+        and e.property_position == 1
         and e.rent == 50
         for e in pay_events
     )

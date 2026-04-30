@@ -8,7 +8,7 @@ class Tile:
 
 
 @dataclass(kw_only=True)
-class OwnableTile(Tile):  # Base class, have static rent
+class OwnableTile(Tile):  # Base class, rent calculated in tile handler
     price: int
     rent: int
     owner: int | None = None

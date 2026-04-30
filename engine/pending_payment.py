@@ -7,4 +7,4 @@ class PendingPayment:
     amount: int
     creditor_player_id: int | None = None  # None means "bank"
     reason: str | None = None
-    property_name: str | None = None
+    property_position: int | None = None
