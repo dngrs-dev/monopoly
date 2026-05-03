@@ -7,11 +7,45 @@
   </head>
   <body>
     <p>Signed in as: <span id="current-user">(not signed in)</span></p>
+    <p>Status: <span id="ws-status">disconnected</span></p>
 
-    <button id="connect" disabled>Connect</button>
-    <button id="login">Login</button>
-    <button id="logout" disabled>Logout</button>
-    <button id="change-username" disabled>Change username</button>
+    <section>
+      <h2>Create lobby</h2>
+      <label>
+        Player limit
+        <input id="lobby-limit" type="number" min="1" max="8" value="4" />
+      </label>
+      <label>
+        Visibility
+        <select id="lobby-visibility">
+          <option value="public" selected>Public</option>
+          <option value="private">Private</option>
+        </select>
+      </label>
+      <button id="create-lobby" disabled>Create lobby</button>
+    </section>
+
+    <section id="my-lobby" hidden>
+      <h2>Your lobby</h2>
+      <div>Lobby ID: <span id="my-lobby-id">(none)</span></div>
+      <div>Owner: <span id="my-lobby-owner">(none)</span></div>
+      <div>Visibility: <span id="my-lobby-visibility">(none)</span></div>
+      <div>Limit: <span id="my-lobby-limit">(none)</span></div>
+      <div>Members: <span id="my-lobby-members">(none)</span></div>
+      <button id="start-lobby" disabled>Start game</button>
+      <button id="leave-lobby">Leave lobby</button>
+    </section>
+
+    <section>
+      <h2>Public lobbies</h2>
+      <ul id="lobby-list"></ul>
+    </section>
+
+    <div>
+      <button id="login">Login</button>
+      <button id="logout" disabled>Logout</button>
+      <button id="change-username" disabled>Change username</button>
+    </div>
 
     <p id="err" role="alert"></p>
 
