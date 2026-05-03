@@ -171,9 +171,9 @@ def _build_pending_payment_choices(game: Game) -> list[Choice]:
     if pending is None:
         raise ValueError("No pending payment")
 
-    player = game.current_player()
-    if player.id != pending.debtor_player_id:
-        raise ValueError("Pending payment debtor is not the current player")
+    player = next((p for p in game.players if p.id == pending.debtor_player_id), None)
+    if player is None:
+        raise ValueError("Pending payment debtor not found")
 
     choices: list[Choice] = []
     choices.extend(

@@ -1,6 +1,7 @@
 from functools import singledispatch
 
-from engine.game import Game
+from engine.game import Game, TurnPhase, build_available_choices
+from engine.pending_payment import PendingPayment
 from engine.cards import (
     Card,
     MoveStepsCard,
@@ -89,6 +90,15 @@ def _(card: MoneyCard, game: Game) -> tuple[Game, list[Event], list[Choice]]:
     events: list[Event] = []
     choices: list[Choice] = []
     game.board.get_tile(player.position).deck.discard_card(card)
+    if card.amount < 0 and player.balance < -card.amount:
+        game.pending_payment = PendingPayment(
+            debtor_player_id=player.id,
+            creditor_player_id=None,
+            amount=-card.amount,
+            reason="card",
+        )
+        game.turn_phase = TurnPhase.AWAIT_CHOICE
+        return game, events, build_available_choices(game)
     player.update_balance(card.amount)
     events.append(
         PlayerPaidMoney(player_id=player.id, amount=card.amount, reason="card")
@@ -185,25 +195,36 @@ def _(card: PayEachPlayerCard, game: Game) -> tuple[Game, list[Event], list[Choi
     events: list[Event] = []
     choices: list[Choice] = []
     game.board.get_tile(player.position).deck.discard_card(card)
+    other_players = [p for p in game.players if p.id != player.id]
+    total_payment = card.amount * len(other_players)
+    if total_payment > 0 and player.balance < total_payment:
+        game.pending_payment = PendingPayment(
+            debtor_player_id=player.id,
+            creditor_player_id=None,
+            amount=total_payment,
+            reason="card_pay_each_player",
+            per_player_amount=card.amount,
+        )
+        game.turn_phase = TurnPhase.AWAIT_CHOICE
+        return game, events, build_available_choices(game)
 
-    for other_player in game.players:
-        if other_player.id != player.id:
-            other_player.update_balance(card.amount)
-            player.update_balance(-card.amount)
-            events.append(
-                PlayerPaidMoney(
-                    player_id=player.id,
-                    amount=-card.amount,
-                    reason="card_pay_each_player",
-                )
+    for other_player in other_players:
+        other_player.update_balance(card.amount)
+        player.update_balance(-card.amount)
+        events.append(
+            PlayerPaidMoney(
+                player_id=player.id,
+                amount=-card.amount,
+                reason="card_pay_each_player",
             )
-            events.append(
-                PlayerPaidMoney(
-                    player_id=other_player.id,
-                    amount=card.amount,
-                    reason="card_receive_from_each_player",
-                )
+        )
+        events.append(
+            PlayerPaidMoney(
+                player_id=other_player.id,
+                amount=card.amount,
+                reason="card_receive_from_each_player",
             )
+        )
 
     return game, events, choices
 
@@ -213,25 +234,39 @@ def _(card: CollectFromEachPlayerCard, game: Game) -> tuple[Game, list[Event], l
     events: list[Event] = []
     choices: list[Choice] = []
     game.board.get_tile(player.position).deck.discard_card(card)
+    payer_ids = [p.id for p in game.players if p.id != player.id]
+    for index, payer_id in enumerate(payer_ids):
+        other_player = next((p for p in game.players if p.id == payer_id), None)
+        if other_player is None:
+            raise ValueError("Player not found")
+        if other_player.balance < card.amount:
+            game.pending_payment = PendingPayment(
+                debtor_player_id=other_player.id,
+                creditor_player_id=player.id,
+                amount=card.amount,
+                reason="card_collect_from_each_player",
+                per_player_amount=card.amount,
+                remaining_player_ids=payer_ids[index + 1 :],
+            )
+            game.turn_phase = TurnPhase.AWAIT_CHOICE
+            return game, events, build_available_choices(game)
 
-    for other_player in game.players:
-        if other_player.id != player.id:
-            other_player.update_balance(-card.amount)
-            player.update_balance(card.amount)
-            events.append(
-                PlayerPaidMoney(
-                    player_id=other_player.id,
-                    amount=-card.amount,
-                    reason="card_pay_each_player",
-                )
+        other_player.update_balance(-card.amount)
+        player.update_balance(card.amount)
+        events.append(
+            PlayerPaidMoney(
+                player_id=other_player.id,
+                amount=-card.amount,
+                reason="card_pay_each_player",
             )
-            events.append(
-                PlayerPaidMoney(
-                    player_id=player.id,
-                    amount=card.amount,
-                    reason="card_receive_from_each_player",
-                )
+        )
+        events.append(
+            PlayerPaidMoney(
+                player_id=player.id,
+                amount=card.amount,
+                reason="card_receive_from_each_player",
             )
+        )
 
     return game, events, choices
 
@@ -248,6 +283,16 @@ def _(card: PayPerImprovementCard, game: Game) -> tuple[Game, list[Event], list[
             level = min(tile.improvement_level, len(card.amount) - 1)
             payment = card.amount[level]
             total_payment += payment
+
+    if total_payment > 0 and player.balance < total_payment:
+        game.pending_payment = PendingPayment(
+            debtor_player_id=player.id,
+            creditor_player_id=None,
+            amount=total_payment,
+            reason="card_pay_per_improvement",
+        )
+        game.turn_phase = TurnPhase.AWAIT_CHOICE
+        return game, events, build_available_choices(game)
 
     player.update_balance(-total_payment)
     events.append(

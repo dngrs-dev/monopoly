@@ -21,6 +21,7 @@ from engine.choices import (
     DeclareBankruptcyChoice,
 )
 from engine.game import Game, TurnPhase, build_available_choices
+from engine.pending_payment import PendingPayment
 from engine.events import (
     Event,
     PlayerRolledDice,
@@ -111,6 +112,53 @@ def _get_player_by_id(game: Game, player_id: int):
     return player
 
 
+def _collect_from_each_player(
+    game: Game,
+    *,
+    payee_id: int,
+    payer_ids: list[int],
+    amount: int,
+) -> tuple[Game, list[Event], list[Choice]]:
+    events: list[Event] = []
+    choices: list[Choice] = []
+    payee = _get_player_by_id(game, payee_id)
+
+    for index, payer_id in enumerate(payer_ids):
+        payer = _get_player_by_id(game, payer_id)
+        if payer.balance < amount:
+            game.pending_payment = PendingPayment(
+                debtor_player_id=payer_id,
+                creditor_player_id=payee_id,
+                amount=amount,
+                reason="card_collect_from_each_player",
+                per_player_amount=amount,
+                remaining_player_ids=payer_ids[index + 1 :],
+            )
+            game.turn_phase = TurnPhase.AWAIT_CHOICE
+            return game, events, build_available_choices(game)
+
+        payer.update_balance(-amount)
+        payee.update_balance(amount)
+        events.append(
+            PlayerPaidMoney(
+                player_id=payer_id,
+                amount=-amount,
+                reason="card_pay_each_player",
+            )
+        )
+        events.append(
+            PlayerPaidMoney(
+                player_id=payee_id,
+                amount=amount,
+                reason="card_receive_from_each_player",
+            )
+        )
+
+    game.pending_payment = None
+    game.turn_phase = TurnPhase.END_TURN
+    return game, events, choices
+
+
 @singledispatch
 def apply_choice(choice: Choice, game: Game) -> tuple[Game, list[Event], list[Choice]]:
     raise NotImplementedError(f"No handler for choice type: {type(choice)}")
@@ -123,7 +171,7 @@ def _(choice: RollDiceChoice, game: Game) -> tuple[Game, list[Event], list[Choic
     events: list[Event] = []
     choices: list[Choice] = []
 
-    player = game.current_player()
+    player = _get_player_by_id(game, choice.player_id)
     if player.in_jail:
         raise ValueError("Player is in jail and cannot roll dice")
 
@@ -188,7 +236,7 @@ def _(choice: BuyPropertyChoice, game: Game) -> tuple[Game, list[Event], list[Ch
     events: list[Event] = []
     choices: list[Choice] = []
 
-    player = game.current_player()
+    player = _get_player_by_id(game, choice.player_id)
     tile = game.board.get_tile(player.position)
     if not isinstance(tile, OwnableTile):
         raise ValueError("Current tile is not a property")
@@ -223,7 +271,7 @@ def _(
     events: list[Event] = []
     choices: list[Choice] = []
 
-    player = game.current_player()
+    player = _get_player_by_id(game, choice.player_id)
     tile = game.board.get_tile(player.position)
     if not isinstance(tile, OwnableTile):
         raise ValueError("Current tile is not a property")
@@ -266,7 +314,7 @@ def _(choice: PayFineChoice, game: Game) -> tuple[Game, list[Event], list[Choice
 
     events: list[Event] = []
 
-    player = game.current_player()
+    player = _get_player_by_id(game, choice.player_id)
     tile = game.board.get_tile(player.position)
     if not player.in_jail:
         raise ValueError("Player is not in jail")
@@ -296,7 +344,7 @@ def _(
     events: list[Event] = []
     choices: list[Choice] = []
 
-    player = game.current_player()
+    player = _get_player_by_id(game, choice.player_id)
     if not player.in_jail:
         raise ValueError("Player is not in jail")
 
@@ -348,7 +396,7 @@ def _(
     events: list[Event] = []
     choices: list[Choice] = []
 
-    player = game.current_player()
+    player = _get_player_by_id(game, choice.player_id)
     if not player.in_jail:
         raise ValueError("Player is not in jail")
 
@@ -698,7 +746,7 @@ def _(
 
     events: list[Event] = []
 
-    player = game.current_player()
+    player = _get_player_by_id(game, choice.player_id)
     tile = game.board.get_tile(choice.property_position)
     if not isinstance(tile, StreetTile):
         raise ValueError("Tile at position is not a street property")
@@ -750,7 +798,7 @@ def _(
 
     events: list[Event] = []
 
-    player = game.current_player()
+    player = _get_player_by_id(game, choice.player_id)
     tile = game.board.get_tile(choice.property_position)
     if not isinstance(tile, StreetTile):
         raise ValueError("Tile at position is not a street property")
@@ -796,7 +844,7 @@ def _(
 
     events: list[Event] = []
 
-    player = game.current_player()
+    player = _get_player_by_id(game, choice.player_id)
     tile = game.board.get_tile(choice.property_position)
     if not isinstance(tile, OwnableTile):
         raise ValueError("Tile at position is not a property")
@@ -871,9 +919,74 @@ def _(
     if choice.amount != pending.amount:
         raise ValueError("Payment amount does not match pending payment")
 
-    debtor = game.current_player()
+    debtor = _get_player_by_id(game, pending.debtor_player_id)
     if debtor.balance < pending.amount:
         raise ValueError("Debtor cannot afford the pending payment")
+
+    events: list[Event] = []
+    if pending.reason == "card_pay_each_player":
+        if pending.per_player_amount is None:
+            raise ValueError("Pending payment missing per-player amount")
+        for other_player in game.players:
+            if other_player.id == debtor.id:
+                continue
+            debtor.update_balance(-pending.per_player_amount)
+            other_player.update_balance(pending.per_player_amount)
+            events.append(
+                PlayerPaidMoney(
+                    player_id=debtor.id,
+                    amount=-pending.per_player_amount,
+                    reason="card_pay_each_player",
+                )
+            )
+            events.append(
+                PlayerPaidMoney(
+                    player_id=other_player.id,
+                    amount=pending.per_player_amount,
+                    reason="card_receive_from_each_player",
+                )
+            )
+
+        game.pending_payment = None
+        game.turn_phase = TurnPhase.END_TURN
+        return game, events, []
+
+    if pending.reason == "card_collect_from_each_player":
+        if pending.creditor_player_id is None:
+            raise ValueError("Pending payment missing collector")
+        creditor = _get_player_by_id(game, pending.creditor_player_id)
+        debtor.update_balance(-pending.amount)
+        creditor.update_balance(pending.amount)
+        events.append(
+            PlayerPaidMoney(
+                player_id=debtor.id,
+                amount=-pending.amount,
+                reason="card_pay_each_player",
+            )
+        )
+        events.append(
+            PlayerPaidMoney(
+                player_id=creditor.id,
+                amount=pending.amount,
+                reason="card_receive_from_each_player",
+            )
+        )
+
+        remaining = pending.remaining_player_ids
+        game.pending_payment = None
+        if remaining:
+            per_player_amount = pending.per_player_amount or pending.amount
+            game, more_events, choices = _collect_from_each_player(
+                game,
+                payee_id=creditor.id,
+                payer_ids=remaining,
+                amount=per_player_amount,
+            )
+            events.extend(more_events)
+            return game, events, choices
+
+        game.turn_phase = TurnPhase.END_TURN
+        return game, events, []
 
     debtor.update_balance(-pending.amount)
 
@@ -881,7 +994,6 @@ def _(
         creditor = _get_player_by_id(game, pending.creditor_player_id)
         creditor.update_balance(pending.amount)
 
-    events: list[Event] = []
     if pending.reason == "rent":
         events.append(
             PlayerPaidRent(
@@ -919,7 +1031,7 @@ def _(
     if pending.debtor_player_id != choice.player_id:
         raise ValueError("Only the debtor can declare bankruptcy")
 
-    debtor = game.current_player()
+    debtor = _get_player_by_id(game, pending.debtor_player_id)
     debtor.bankrupt = True
 
     # Transfer remaining cash and properties.
@@ -946,9 +1058,6 @@ def _(
         debtor.balance = 0
         debtor.cards.clear()
 
-    game.pending_payment = None
-    game.turn_phase = TurnPhase.END_TURN
-
     events: list[Event] = [
         PlayerPaidMoney(
             player_id=debtor.id,
@@ -956,4 +1065,24 @@ def _(
             reason="bankruptcy",
         )
     ]
+
+    remaining = (
+        pending.remaining_player_ids
+        if pending.reason == "card_collect_from_each_player"
+        else []
+    )
+    payee_id = pending.creditor_player_id
+
+    game.pending_payment = None
+    if remaining and payee_id is not None:
+        game, more_events, choices = _collect_from_each_player(
+            game,
+            payee_id=payee_id,
+            payer_ids=remaining,
+            amount=pending.per_player_amount or pending.amount,
+        )
+        events.extend(more_events)
+        return game, events, choices
+
+    game.turn_phase = TurnPhase.END_TURN
     return game, events, []
