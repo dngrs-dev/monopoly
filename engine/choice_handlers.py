@@ -21,11 +21,9 @@ from engine.choices import (
     DeclareBankruptcyChoice,
 )
 from engine.game import Game, TurnPhase, build_available_choices
-from engine.pending_payment import PendingPayment
 from engine.events import (
     Event,
     PlayerRolledDice,
-    PlayerMoved,
     MoveReason,
     PlayerBoughtProperty,
     AuctionStarted,
@@ -40,10 +38,9 @@ from engine.events import (
     PlayerPaidRent,
     PlayerPaidFine,
     PlayerPaidMoney,
-    PlayerWentToJail,
 )
 from engine.tiles import OwnableTile, StreetTile, JailTile
-from engine.tile_handlers import resolve_tile, _calculate_rent
+from engine.tile_handlers import _calculate_rent
 from engine.cards import GetOutOfJailFreeCard
 from engine.auction import Auction
 from engine.tradeoffer import TradeOffer
@@ -105,66 +102,46 @@ def _assert_turn(game: Game, player_id: int, choice: Choice):
         raise ValueError("It's not the player's turn")
 
 
-def _get_player_by_id(game: Game, player_id: int):
-    player = next((p for p in game.players if p.id == player_id), None)
-    if player is None:
-        raise ValueError("Player not found")
-    return player
-
-
-def _collect_from_each_player(
+def _finalize_auction_if_complete(
     game: Game,
-    *,
-    payee_id: int,
-    payer_ids: list[int],
-    amount: int,
-) -> tuple[Game, list[Event], list[Choice]]:
-    events: list[Event] = []
-    choices: list[Choice] = []
-    payee = _get_player_by_id(game, payee_id)
+    auction: Auction,
+) -> tuple[bool, list[Event], list[Choice]]:
+    if not auction.check_auction_end():
+        return False, [], []
 
-    filtered_payer_ids: list[int] = []
-    for payer_id in payer_ids:
-        payer = _get_player_by_id(game, payer_id)
-        if payer.bankrupt:
-            continue
-        filtered_payer_ids.append(payer_id)
-    payer_ids = filtered_payer_ids
+    if (
+        not auction.active_player_ids
+        or auction.last_bid_amount is None
+        or auction.last_bidder_id is None
+    ):
+        game.auction = None
+        game.turn_phase = TurnPhase.END_TURN
+        return True, [], []
 
-    for index, payer_id in enumerate(payer_ids):
-        payer = _get_player_by_id(game, payer_id)
-        if payer.balance < amount:
-            game.pending_payment = PendingPayment(
-                debtor_player_id=payer_id,
-                creditor_player_id=payee_id,
-                amount=amount,
-                reason="card_collect_from_each_player",
-                per_player_amount=amount,
-                remaining_player_ids=payer_ids[index + 1 :],
-            )
-            game.turn_phase = TurnPhase.AWAIT_CHOICE
-            return game, events, build_available_choices(game)
+    winning_player_id = auction.last_bidder_id
+    winning_bid = auction.last_bid_amount
+    tile = game.board.get_tile(auction.tile_position)
+    if not isinstance(tile, OwnableTile):
+        raise ValueError("Auctioned tile is not a property")
 
-        payer.update_balance(-amount)
-        payee.update_balance(amount)
-        events.append(
-            PlayerPaidMoney(
-                player_id=payer_id,
-                amount=-amount,
-                reason="card_pay_each_player",
-            )
+    if winning_player_id not in auction.active_player_ids:
+        raise ValueError("Winning bidder is not an active auction participant")
+
+    tile.owner = winning_player_id
+    winning_player = game.get_player(winning_player_id)
+    winning_player.update_balance(-winning_bid)
+
+    events = [
+        PlayerBoughtProperty(
+            player_id=winning_player_id,
+            property_position=auction.tile_position,
+            price=winning_bid,
         )
-        events.append(
-            PlayerPaidMoney(
-                player_id=payee_id,
-                amount=amount,
-                reason="card_receive_from_each_player",
-            )
-        )
+    ]
 
-    game.pending_payment = None
+    game.auction = None
     game.turn_phase = TurnPhase.END_TURN
-    return game, events, choices
+    return True, events, []
 
 
 @singledispatch
@@ -179,7 +156,7 @@ def _(choice: RollDiceChoice, game: Game) -> tuple[Game, list[Event], list[Choic
     events: list[Event] = []
     choices: list[Choice] = []
 
-    player = _get_player_by_id(game, choice.player_id)
+    player = game.get_player(choice.player_id)
     if player.in_jail:
         raise ValueError("Player is in jail and cannot roll dice")
 
@@ -188,52 +165,21 @@ def _(choice: RollDiceChoice, game: Game) -> tuple[Game, list[Event], list[Choic
     if dice1 == dice2:
         game.doubles_in_row += 1
         if game.doubles_in_row >= game.rules.max_doubles_in_row:
-            # Send player to jail
-            from_position = player.position
-            jail_position = next(
-                (i for i, t in enumerate(game.board.tiles) if isinstance(t, JailTile)), None
+            events.extend(
+                game.send_player_to_jail(player, reason=MoveReason.TILE_EFFECT)
             )
-            if jail_position is None:
-                raise ValueError("Board does not have a Jail tile")
-            player.position = jail_position
-            player.in_jail = True
-            player.skip_turns = game.board.get_tile(jail_position).skip_turns
-            events.append(
-                PlayerMoved(
-                    player_id=player.id,
-                    from_position=from_position,
-                    to_position=player.position,
-                    reason=MoveReason.TILE_EFFECT,
-                )
-            )
-            events.append(PlayerWentToJail(player_id=player.id))
-            
             game.turn_phase = TurnPhase.END_TURN
             return game, events, choices
         game.pending_extra_turn = True
 
-    roll = dice1 + dice2
-    from_position = player.position
-    move_events = player.move_steps(roll, game.board)
-
     events.append(PlayerRolledDice(player_id=player.id, dice1=dice1, dice2=dice2))
-    events.append(
-        PlayerMoved(
-            player_id=player.id,
-            from_position=from_position,
-            to_position=player.position,
-            steps=roll,
-            reason=MoveReason.ROLL_DICE,
-        )
+    game.turn_phase = TurnPhase.RESOLVE_TILE
+    roll = dice1 + dice2
+    game, move_events, move_choices = game.move_current_player_and_resolve_tile(
+        steps=roll, reason=MoveReason.ROLL_DICE
     )
     events.extend(move_events)
-
-    game.turn_phase = TurnPhase.RESOLVE_TILE
-    game, tile_events, tile_choices = resolve_tile(
-        game.board.get_tile(game.current_player().position), game
-    )
-    events.extend(tile_events)
-    choices.extend(tile_choices)
+    choices.extend(move_choices)
     return game, events, choices
 
 
@@ -244,7 +190,7 @@ def _(choice: BuyPropertyChoice, game: Game) -> tuple[Game, list[Event], list[Ch
     events: list[Event] = []
     choices: list[Choice] = []
 
-    player = _get_player_by_id(game, choice.player_id)
+    player = game.get_player(choice.player_id)
     tile = game.board.get_tile(player.position)
     if not isinstance(tile, OwnableTile):
         raise ValueError("Current tile is not a property")
@@ -279,7 +225,7 @@ def _(
     events: list[Event] = []
     choices: list[Choice] = []
 
-    player = _get_player_by_id(game, choice.player_id)
+    player = game.get_player(choice.player_id)
     tile = game.board.get_tile(player.position)
     if not isinstance(tile, OwnableTile):
         raise ValueError("Current tile is not a property")
@@ -322,7 +268,7 @@ def _(choice: PayFineChoice, game: Game) -> tuple[Game, list[Event], list[Choice
 
     events: list[Event] = []
 
-    player = _get_player_by_id(game, choice.player_id)
+    player = game.get_player(choice.player_id)
     tile = game.board.get_tile(player.position)
     if not player.in_jail:
         raise ValueError("Player is not in jail")
@@ -352,7 +298,7 @@ def _(
     events: list[Event] = []
     choices: list[Choice] = []
 
-    player = _get_player_by_id(game, choice.player_id)
+    player = game.get_player(choice.player_id)
     if not player.in_jail:
         raise ValueError("Player is not in jail")
 
@@ -364,25 +310,13 @@ def _(
         player.skip_turns = 0
         events.append(PlayerReleasedFromJail(player_id=player.id))
         # Move the player according to the roll
-        from_position = player.position
+        game.turn_phase = TurnPhase.RESOLVE_TILE
         roll = dice1 + dice2
-        move_events = player.move_steps(roll, game.board)
-        events.append(
-            PlayerMoved(
-                player_id=player.id,
-                from_position=from_position,
-                to_position=player.position,
-                steps=roll,
-                reason=MoveReason.ROLL_DICE,
-            )
+        game, move_events, move_choices = game.move_current_player_and_resolve_tile(
+            steps=roll, reason=MoveReason.ROLL_DICE
         )
         events.extend(move_events)
-        game.turn_phase = TurnPhase.RESOLVE_TILE
-        game, tile_events, tile_choices = resolve_tile(
-            game.board.get_tile(game.current_player().position), game
-        )
-        events.extend(tile_events)
-        choices.extend(tile_choices)
+        choices.extend(move_choices)
     else:
         player.skip_turns -= 1
         events.append(PlayerSkipTurn(player_id=player.id, turns_left=player.skip_turns))
@@ -404,7 +338,7 @@ def _(
     events: list[Event] = []
     choices: list[Choice] = []
 
-    player = _get_player_by_id(game, choice.player_id)
+    player = game.get_player(choice.player_id)
     if not player.in_jail:
         raise ValueError("Player is not in jail")
 
@@ -449,7 +383,7 @@ def _(choice: AuctionBidChoice, game: Game) -> tuple[Game, list[Event], list[Cho
     if choice.bid != game.auction.active_bid():
         raise ValueError("Bid amount does not match current auction bid")
 
-    bidder = _get_player_by_id(game, choice.player_id)
+    bidder = game.get_player(choice.player_id)
     if bidder.balance < choice.bid:
         raise ValueError("Player cannot afford this bid")
 
@@ -462,60 +396,12 @@ def _(choice: AuctionBidChoice, game: Game) -> tuple[Game, list[Event], list[Cho
     auction.last_bid_amount = choice.bid
     auction.step += 1
 
-    if auction.check_auction_end():
-        # If nobody bid or everyone passed, the property stays unowned.
-        if not auction.active_player_ids or auction.last_bid_amount is None or auction.last_bidder_id is None:
-            game.auction = None
-            game.turn_phase = TurnPhase.END_TURN
-            return game, events, choices
+    ended, end_events, end_choices = _finalize_auction_if_complete(game, auction)
+    if ended:
+        return game, end_events, end_choices
 
-        winning_player_id = auction.last_bidder_id
-        winning_bid = auction.last_bid_amount
-        tile = game.board.get_tile(auction.tile_position)
-        if not isinstance(tile, OwnableTile):
-            raise ValueError("Auctioned tile is not a property")
-
-        if winning_player_id not in auction.active_player_ids:
-            raise ValueError("Winning bidder is not an active auction participant")
-
-        # Transfer ownership of the property to the winning bidder
-        tile.owner = winning_player_id
-        winning_player = next(p for p in game.players if p.id == winning_player_id)
-        winning_player.update_balance(-winning_bid)
-
-        events.append(
-            PlayerBoughtProperty(
-                player_id=winning_player_id,
-                property_position=auction.tile_position,
-                price=winning_bid,
-            )
-        )
-
-        # Clear the auction state
-        game.auction = None
-
-        # End the turn after the auction concludes
-        game.turn_phase = TurnPhase.END_TURN
-        return game, events, choices
-
-    # Move cursor to the next active bidder
-    auction.cursor_index = (auction.cursor_index + 1) % len(auction.active_player_ids)
-
-    # Generate choices for the next bidder
-    next_bidder_id = auction.active_player_id()
-    choices.append(
-        AuctionBidChoice(
-            player_id=next_bidder_id,
-            tile_position=auction.tile_position,
-            bid=auction.active_bid(),
-        )
-    )
-    choices.append(
-        AuctionPassChoice(
-            player_id=next_bidder_id,
-            tile_position=auction.tile_position,
-        )
-    )
+    auction.advance_cursor()
+    choices.extend(auction.current_choices())
 
     return game, events, choices
 
@@ -534,76 +420,18 @@ def _(choice: AuctionPassChoice, game: Game) -> tuple[Game, list[Event], list[Ch
 
     # Remove the player from active bidders
     auction = game.auction
-    removed_index = auction.active_player_ids.index(choice.player_id)
-    auction.active_player_ids.pop(removed_index)
-    if removed_index < auction.cursor_index:
-        auction.cursor_index -= 1
-    if auction.active_player_ids and auction.cursor_index >= len(auction.active_player_ids):
-        auction.cursor_index = 0
+    auction.remove_bidder(choice.player_id)
 
-    # Check if the auction has ended
-    if auction.check_auction_end():
-        # If nobody bid or everyone passed, the property stays unowned.
-        if not auction.active_player_ids or auction.last_bid_amount is None or auction.last_bidder_id is None:
-            game.auction = None
-            game.turn_phase = TurnPhase.END_TURN
-            return game, events, choices
+    ended, end_events, end_choices = _finalize_auction_if_complete(game, auction)
+    if ended:
+        return game, end_events, end_choices
 
-        winning_player_id = auction.last_bidder_id
-        winning_bid = auction.last_bid_amount
-        tile = game.board.get_tile(auction.tile_position)
-        if not isinstance(tile, OwnableTile):
-            raise ValueError("Auctioned tile is not a property")
-
-        if winning_player_id not in auction.active_player_ids:
-            raise ValueError("Winning bidder is not an active auction participant")
-
-        # Transfer ownership of the property to the winning bidder
-        tile.owner = winning_player_id
-        winning_player = next(p for p in game.players if p.id == winning_player_id)
-        winning_player.update_balance(-winning_bid)
-
-        events.append(
-            PlayerBoughtProperty(
-                player_id=winning_player_id,
-                property_position=auction.tile_position,
-                price=winning_bid,
-            )
-        )
-
-        # Clear the auction state
-        game.auction = None
-
-        # End the turn after the auction concludes
-        game.turn_phase = TurnPhase.END_TURN
-    else:
-        # Generate choices for the next bidder
-        next_bidder_id = auction.active_player_id()
-        choices.append(
-            AuctionBidChoice(
-                player_id=next_bidder_id,
-                tile_position=auction.tile_position,
-                bid=auction.active_bid(),
-            )
-        )
-        choices.append(
-            AuctionPassChoice(
-                player_id=next_bidder_id,
-                tile_position=auction.tile_position,
-            )
-        )
+    choices.extend(auction.current_choices())
 
     return game, events, choices
 
 
 ## TRADE OFFER
-
-
-def _get_player(game: Game, player_id: int):
-    player = next((p for p in game.players if p.id == player_id), None)
-    if player is None:
-        raise ValueError("Player not found")
-    return player
 
 
 def _assert_positions_owned_by(game: Game, positions: list[int], owner_id: int):
@@ -636,7 +464,7 @@ def _(
     if choice.player_id == choice.receiving_player_id:
         raise ValueError("Cannot make a trade offer to oneself")
 
-    _get_player(game, choice.receiving_player_id)  # Validate receiving player exists
+    game.get_player(choice.receiving_player_id)  # Validate receiving player exists
 
     events: list[Event] = []
     choices: list[Choice] = []
@@ -661,8 +489,8 @@ def _(
     if choice.offered_money < 0 or choice.requested_money < 0:
         raise ValueError("Money amounts cannot be negative")
 
-    offering_player = _get_player(game, choice.player_id)
-    receiving_player = _get_player(game, choice.receiving_player_id)
+    offering_player = game.get_player(choice.player_id)
+    receiving_player = game.get_player(choice.receiving_player_id)
 
     if offering_player.balance < choice.offered_money:
         raise ValueError("Offering player cannot afford the offered money")
@@ -703,8 +531,8 @@ def _(
         raise ValueError("Only the receiving player can accept the trade offer")
 
     offer = game.trade_offer
-    offering_player = _get_player(game, offer.offering_player_id)
-    receiving_player = _get_player(game, offer.receiving_player_id)
+    offering_player = game.get_player(offer.offering_player_id)
+    receiving_player = game.get_player(offer.receiving_player_id)
 
     if offering_player.balance < offer.offered_money:
         raise ValueError("Offering player cannot afford the offered money")
@@ -766,7 +594,7 @@ def _(
 
     events: list[Event] = []
 
-    player = _get_player_by_id(game, choice.player_id)
+    player = game.get_player(choice.player_id)
     tile = game.board.get_tile(choice.property_position)
     if not isinstance(tile, StreetTile):
         raise ValueError("Tile at position is not a street property")
@@ -774,11 +602,7 @@ def _(
         raise ValueError("Player does not own this property")
     if tile.improvement_level >= len(tile.rent_schedule) - 1:
         raise ValueError("Property is already at max improvement level")
-    improvement_price = (
-        tile.improvement_prices
-        if isinstance(tile.improvement_prices, int)
-        else tile.improvement_prices[tile.improvement_level]
-    )
+    improvement_price = tile.improvement_buy_price()
     if choice.price != improvement_price:
         raise ValueError("Offer price does not match improvement price")
     if player.balance < improvement_price:
@@ -818,7 +642,7 @@ def _(
 
     events: list[Event] = []
 
-    player = _get_player_by_id(game, choice.player_id)
+    player = game.get_player(choice.player_id)
     tile = game.board.get_tile(choice.property_position)
     if not isinstance(tile, StreetTile):
         raise ValueError("Tile at position is not a street property")
@@ -826,14 +650,7 @@ def _(
         raise ValueError("Player does not own this property")
     if tile.improvement_level <= 0:
         raise ValueError("No improvements to sell on this property")
-    improvement_price = (
-        tile.improvement_prices
-        if isinstance(tile.improvement_prices, int)
-        else tile.improvement_prices[tile.improvement_level - 1]
-    )
-    improvement_sell_price = int(
-        improvement_price * tile.improvement_sell_price_multiplier
-    )
+    improvement_sell_price = tile.improvement_sell_price()
     if choice.price != improvement_sell_price:
         raise ValueError("Offer price does not match improvement sell price")
     
@@ -864,7 +681,7 @@ def _(
 
     events: list[Event] = []
 
-    player = _get_player_by_id(game, choice.player_id)
+    player = game.get_player(choice.player_id)
     tile = game.board.get_tile(choice.property_position)
     if not isinstance(tile, OwnableTile):
         raise ValueError("Tile at position is not a property")
@@ -876,7 +693,7 @@ def _(
         raise ValueError("Player does not own this property")
     if tile.mortgaged:
         raise ValueError("Property is already mortgaged")
-    mortgage_value = tile.price // 2
+    mortgage_value = tile.mortgage_value()
     if choice.mortgage_value != mortgage_value:
         raise ValueError("Offer price does not match mortgage value")
     player.update_balance(mortgage_value)
@@ -899,7 +716,7 @@ def _(
 
     events: list[Event] = []
 
-    player = game.current_player()
+    player = game.get_player(choice.player_id)
     tile = game.board.get_tile(choice.property_position)
     if not isinstance(tile, OwnableTile):
         raise ValueError("Tile at position is not a property")
@@ -907,7 +724,7 @@ def _(
         raise ValueError("Player does not own this property")
     if not tile.mortgaged:
         raise ValueError("Property is not mortgaged")
-    unmortgage_value = int(tile.price * 0.55)
+    unmortgage_value = tile.unmortgage_value()
     if choice.unmortgage_value != unmortgage_value:
         raise ValueError("Offer price does not match unmortgage value")
     if player.balance < unmortgage_value:
@@ -939,7 +756,7 @@ def _(
     if choice.amount != pending.amount:
         raise ValueError("Payment amount does not match pending payment")
 
-    debtor = _get_player_by_id(game, pending.debtor_player_id)
+    debtor = game.get_player(pending.debtor_player_id)
     if debtor.balance < pending.amount:
         raise ValueError("Debtor cannot afford the pending payment")
 
@@ -947,25 +764,16 @@ def _(
     if pending.reason == "card_pay_each_player":
         if pending.per_player_amount is None:
             raise ValueError("Pending payment missing per-player amount")
-        for other_player in game.players:
-            if other_player.id == debtor.id or other_player.bankrupt:
-                continue
-            debtor.update_balance(-pending.per_player_amount)
-            other_player.update_balance(pending.per_player_amount)
-            events.append(
-                PlayerPaidMoney(
-                    player_id=debtor.id,
-                    amount=-pending.per_player_amount,
-                    reason="card_pay_each_player",
-                )
+        payee_ids = pending.remaining_player_ids or game.active_player_ids(
+            exclude_ids={debtor.id}
+        )
+        events.extend(
+            game.pay_each_player(
+                payer_id=debtor.id,
+                amount=pending.per_player_amount,
+                payee_ids=payee_ids,
             )
-            events.append(
-                PlayerPaidMoney(
-                    player_id=other_player.id,
-                    amount=pending.per_player_amount,
-                    reason="card_receive_from_each_player",
-                )
-            )
+        )
 
         game.pending_payment = None
         game.turn_phase = TurnPhase.END_TURN
@@ -974,7 +782,7 @@ def _(
     if pending.reason == "card_collect_from_each_player":
         if pending.creditor_player_id is None:
             raise ValueError("Pending payment missing collector")
-        creditor = _get_player_by_id(game, pending.creditor_player_id)
+        creditor = game.get_player(pending.creditor_player_id)
         debtor.update_balance(-pending.amount)
         creditor.update_balance(pending.amount)
         events.append(
@@ -992,19 +800,15 @@ def _(
             )
         )
 
-        remaining = [
-            payer_id
-            for payer_id in pending.remaining_player_ids
-            if not _get_player_by_id(game, payer_id).bankrupt
-        ]
+        remaining = pending.remaining_player_ids
         game.pending_payment = None
         if remaining:
             per_player_amount = pending.per_player_amount or pending.amount
-            game, more_events, choices = _collect_from_each_player(
-                game,
+            game, more_events, choices = game.collect_from_each_player(
                 payee_id=creditor.id,
                 payer_ids=remaining,
                 amount=per_player_amount,
+                end_turn=True,
             )
             events.extend(more_events)
             return game, events, choices
@@ -1015,7 +819,7 @@ def _(
     debtor.update_balance(-pending.amount)
 
     if pending.creditor_player_id is not None:
-        creditor = _get_player_by_id(game, pending.creditor_player_id)
+        creditor = game.get_player(pending.creditor_player_id)
         creditor.update_balance(pending.amount)
 
     if pending.reason == "rent":
@@ -1055,13 +859,13 @@ def _(
     if pending.debtor_player_id != choice.player_id:
         raise ValueError("Only the debtor can declare bankruptcy")
 
-    debtor = _get_player_by_id(game, pending.debtor_player_id)
+    debtor = game.get_player(pending.debtor_player_id)
     debtor.bankrupt = True
 
     # Transfer remaining cash and properties.
     creditor_id = pending.creditor_player_id
     if creditor_id is not None:
-        creditor = _get_player_by_id(game, creditor_id)
+        creditor = game.get_player(creditor_id)
         if debtor.balance > 0:
             creditor.update_balance(debtor.balance)
             debtor.balance = 0
@@ -1099,11 +903,11 @@ def _(
 
     game.pending_payment = None
     if remaining and payee_id is not None:
-        game, more_events, choices = _collect_from_each_player(
-            game,
+        game, more_events, choices = game.collect_from_each_player(
             payee_id=payee_id,
             payer_ids=remaining,
             amount=pending.per_player_amount or pending.amount,
+            end_turn=True,
         )
         events.extend(more_events)
         return game, events, choices

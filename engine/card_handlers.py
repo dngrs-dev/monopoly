@@ -16,14 +16,11 @@ from engine.cards import (
 )
 from engine.events import (
     Event,
-    PlayerMoved,
     PlayerPaidMoney,
-    PlayerWentToJail,
     MoveReason,
 )
 from engine.choices import Choice
-from engine.tiles import JailTile, StreetTile
-from engine.tile_handlers import resolve_tile
+from engine.tiles import StreetTile
 
 
 @singledispatch
@@ -34,54 +31,20 @@ def resolve_card(card: Card, game: Game) -> tuple[Game, list[Event], list[Choice
 @resolve_card.register
 def _(card: MoveStepsCard, game: Game) -> tuple[Game, list[Event], list[Choice]]:
     player = game.current_player()
-    events: list[Event] = []
-    choices: list[Choice] = []
     game.board.get_tile(player.position).deck.discard_card(card)
-    from_position = player.position
-    move_events = player.move_steps(card.steps, game.board)
-    events.append(
-        PlayerMoved(
-            player_id=player.id,
-            from_position=from_position,
-            to_position=player.position,
-            steps=card.steps,
-            reason=MoveReason.CARD,
-        )
+    return game.move_current_player_and_resolve_tile(
+        steps=card.steps, reason=MoveReason.CARD
     )
-    events.extend(move_events)
-    game, tile_events, tile_choices = resolve_tile(
-        game.board.get_tile(player.position), game
-    )
-    events.extend(tile_events)
-    choices.extend(tile_choices)
-    return game, events, choices
 
 
 @resolve_card.register
 def _(card: MoveToPositionCard, game: Game) -> tuple[Game, list[Event], list[Choice]]:
     player = game.current_player()
-    events: list[Event] = []
-    choices: list[Choice] = []
     game.board.get_tile(player.position).deck.discard_card(card)
-    from_position = player.position
-    steps_forward = (card.position - from_position) % game.board.size()
-    move_events = player.move_position(card.position, game.board)
-    events.append(
-        PlayerMoved(
-            player_id=player.id,
-            from_position=from_position,
-            to_position=player.position,
-            steps=steps_forward,
-            reason=MoveReason.CARD,
-        )
+    steps_forward = (card.position - player.position) % game.board.size()
+    return game.move_current_player_and_resolve_tile(
+        steps=steps_forward, reason=MoveReason.CARD
     )
-    events.extend(move_events)
-    game, tile_events, tile_choices = resolve_tile(
-        game.board.get_tile(player.position), game
-    )
-    events.extend(tile_events)
-    choices.extend(tile_choices)
-    return game, events, choices
 
 
 @resolve_card.register
@@ -109,30 +72,9 @@ def _(card: MoneyCard, game: Game) -> tuple[Game, list[Event], list[Choice]]:
 @resolve_card.register
 def _(card: GoToJailCard, game: Game) -> tuple[Game, list[Event], list[Choice]]:
     player = game.current_player()
-    events: list[Event] = []
-    choices: list[Choice] = []
     game.board.get_tile(player.position).deck.discard_card(card)
-
-    # Move player to jail
-    from_position = player.position
-    jail_position = next(
-        (i for i, t in enumerate(game.board.tiles) if isinstance(t, JailTile)), None
-    )
-    if jail_position is None:
-        raise ValueError("Board does not have a Jail tile")
-    player.position = jail_position
-    player.in_jail = True
-    player.skip_turns = game.board.get_tile(jail_position).skip_turns
-    events.append(
-        PlayerMoved(
-            player_id=player.id,
-            from_position=from_position,
-            to_position=player.position,
-            reason=MoveReason.TILE_EFFECT,
-        )
-    )
-    events.append(PlayerWentToJail(player_id=player.id))
-    return game, events, choices
+    events = game.send_player_to_jail(player, reason=MoveReason.TILE_EFFECT)
+    return game, events, []
 
 
 @resolve_card.register
@@ -149,8 +91,6 @@ def _(card: GetOutOfJailFreeCard, game: Game) -> tuple[Game, list[Event], list[C
 @resolve_card.register
 def _(card: MoveToNearestTileByTypeCard, game: Game) -> tuple[Game, list[Event], list[Choice]]:
     player = game.current_player()
-    events: list[Event] = []
-    choices: list[Choice] = []
     game.board.get_tile(player.position).deck.discard_card(card)
 
     candidates = [
@@ -170,23 +110,7 @@ def _(card: MoveToNearestTileByTypeCard, game: Game) -> tuple[Game, list[Event],
     steps_forward = (nearest_position - from_position) % game.board.size()
     steps_backward = (from_position - nearest_position) % game.board.size()
     steps = steps_forward if steps_forward <= steps_backward else -steps_backward
-    move_events = player.move_steps(steps, game.board)
-    events.append(
-        PlayerMoved(
-            player_id=player.id,
-            from_position=from_position,
-            to_position=player.position,
-            steps=steps,
-            reason=MoveReason.CARD,
-        )
-    )
-    events.extend(move_events)
-    game, tile_events, tile_choices = resolve_tile(
-        game.board.get_tile(player.position), game
-    )
-    events.extend(tile_events)
-    choices.extend(tile_choices)
-    return game, events, choices
+    return game.move_current_player_and_resolve_tile(steps=steps, reason=MoveReason.CARD)
 
 
 @resolve_card.register
@@ -195,8 +119,8 @@ def _(card: PayEachPlayerCard, game: Game) -> tuple[Game, list[Event], list[Choi
     events: list[Event] = []
     choices: list[Choice] = []
     game.board.get_tile(player.position).deck.discard_card(card)
-    other_players = [p for p in game.players if p.id != player.id and not p.bankrupt]
-    total_payment = card.amount * len(other_players)
+    payee_ids = game.active_player_ids(exclude_ids={player.id})
+    total_payment = card.amount * len(payee_ids)
     if total_payment > 0 and player.balance < total_payment:
         game.pending_payment = PendingPayment(
             debtor_player_id=player.id,
@@ -204,71 +128,30 @@ def _(card: PayEachPlayerCard, game: Game) -> tuple[Game, list[Event], list[Choi
             amount=total_payment,
             reason="card_pay_each_player",
             per_player_amount=card.amount,
+            remaining_player_ids=payee_ids,
         )
         game.turn_phase = TurnPhase.AWAIT_CHOICE
         return game, events, build_available_choices(game)
 
-    for other_player in other_players:
-        other_player.update_balance(card.amount)
-        player.update_balance(-card.amount)
-        events.append(
-            PlayerPaidMoney(
-                player_id=player.id,
-                amount=-card.amount,
-                reason="card_pay_each_player",
-            )
+    events.extend(
+        game.pay_each_player(
+            payer_id=player.id, amount=card.amount, payee_ids=payee_ids
         )
-        events.append(
-            PlayerPaidMoney(
-                player_id=other_player.id,
-                amount=card.amount,
-                reason="card_receive_from_each_player",
-            )
-        )
+    )
 
     return game, events, choices
 
 @resolve_card.register
 def _(card: CollectFromEachPlayerCard, game: Game) -> tuple[Game, list[Event], list[Choice]]:
     player = game.current_player()
-    events: list[Event] = []
-    choices: list[Choice] = []
     game.board.get_tile(player.position).deck.discard_card(card)
-    payer_ids = [p.id for p in game.players if p.id != player.id and not p.bankrupt]
-    for index, payer_id in enumerate(payer_ids):
-        other_player = next((p for p in game.players if p.id == payer_id), None)
-        if other_player is None:
-            raise ValueError("Player not found")
-        if other_player.balance < card.amount:
-            game.pending_payment = PendingPayment(
-                debtor_player_id=other_player.id,
-                creditor_player_id=player.id,
-                amount=card.amount,
-                reason="card_collect_from_each_player",
-                per_player_amount=card.amount,
-                remaining_player_ids=payer_ids[index + 1 :],
-            )
-            game.turn_phase = TurnPhase.AWAIT_CHOICE
-            return game, events, build_available_choices(game)
-
-        other_player.update_balance(-card.amount)
-        player.update_balance(card.amount)
-        events.append(
-            PlayerPaidMoney(
-                player_id=other_player.id,
-                amount=-card.amount,
-                reason="card_pay_each_player",
-            )
-        )
-        events.append(
-            PlayerPaidMoney(
-                player_id=player.id,
-                amount=card.amount,
-                reason="card_receive_from_each_player",
-            )
-        )
-
-    return game, events, choices
+    payer_ids = game.active_player_ids(exclude_ids={player.id})
+    return game.collect_from_each_player(
+        payee_id=player.id,
+        payer_ids=payer_ids,
+        amount=card.amount,
+        end_turn=False,
+    )
 
 @resolve_card.register
 def _(card: PayPerImprovementCard, game: Game) -> tuple[Game, list[Event], list[Choice]]:

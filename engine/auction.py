@@ -21,23 +21,9 @@ class Auction:
 
     def start(self) -> list[Choice]:
         # Start the auction with the initial player
-        choices: list[Choice] = []
         self.step = 1
         self.cursor_index = 0
-        choices.append(
-            AuctionBidChoice(
-                player_id=self.active_player_ids[self.cursor_index],
-                tile_position=self.tile_position,
-                bid=self.active_bid(),
-            )
-        )
-        choices.append(
-            AuctionPassChoice(
-                player_id=self.active_player_ids[self.cursor_index],
-                tile_position=self.tile_position,
-            )
-        )
-        return choices
+        return self.current_choices()
 
     def check_auction_end(self) -> bool:
         # Auction ends when zero or one active player remains.
@@ -47,4 +33,29 @@ class Auction:
     
     def active_player_id(self) -> int:
         return self.active_player_ids[self.cursor_index]
+
+    def current_choices(self) -> list[Choice]:
+        player_id = self.active_player_id()
+        return [
+            AuctionBidChoice(
+                player_id=player_id,
+                tile_position=self.tile_position,
+                bid=self.active_bid(),
+            ),
+            AuctionPassChoice(
+                player_id=player_id,
+                tile_position=self.tile_position,
+            ),
+        ]
+
+    def advance_cursor(self) -> None:
+        self.cursor_index = (self.cursor_index + 1) % len(self.active_player_ids)
+
+    def remove_bidder(self, player_id: int) -> None:
+        removed_index = self.active_player_ids.index(player_id)
+        self.active_player_ids.pop(removed_index)
+        if removed_index < self.cursor_index:
+            self.cursor_index -= 1
+        if self.active_player_ids and self.cursor_index >= len(self.active_player_ids):
+            self.cursor_index = 0
     

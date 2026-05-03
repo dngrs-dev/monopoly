@@ -28,3 +28,9 @@ class Board:
     def get_group_tiles(self, group_id: int) -> list[Tile]:
         return [tile for tile in self.tiles if hasattr(tile, 'group_id') and tile.group_id == group_id]
 
+    def find_tile_position(self, tile_type: type[Tile]) -> int:
+        for index, tile in enumerate(self.tiles):
+            if isinstance(tile, tile_type):
+                return index
+        raise ValueError(f"Board does not have a {tile_type.__name__} tile")
+

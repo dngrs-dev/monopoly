@@ -5,7 +5,6 @@ from engine.tiles import (
     OwnableTile,
     ChanceTile,
     GoToJailTile,
-    JailTile,
     StreetTile,
     RailroadTile,
     UtilityTile,
@@ -18,9 +17,7 @@ from engine.events import (
     PlayerLanded,
     PlayerPaidRent,
     PlayerDrewCard,
-    PlayerWentToJail,
     MoveReason,
-    PlayerMoved,
     PlayerPaidFine,
 )
 from engine.choices import Choice, BuyPropertyChoice, DeclineBuyPropertyChoice
@@ -146,24 +143,7 @@ def _(
     choices: list[Choice] = []
 
     # Move player to jail
-    from_position = player.position
-    jail_position = next(
-        (i for i, t in enumerate(game.board.tiles) if isinstance(t, JailTile)), None
-    )
-    if jail_position is None:
-        raise ValueError("Board does not have a Jail tile")
-    player.position = jail_position
-    player.in_jail = True
-    player.skip_turns = game.board.get_tile(jail_position).skip_turns
-    events.append(
-        PlayerMoved(
-            player_id=player.id,
-            from_position=from_position,
-            to_position=player.position,
-            reason=MoveReason.TILE_EFFECT,
-        )
-    )
-    events.append(PlayerWentToJail(player_id=player.id))
+    events.extend(game.send_player_to_jail(player, reason=MoveReason.TILE_EFFECT))
 
     game.turn_phase = TurnPhase.END_TURN
     return game, events, choices

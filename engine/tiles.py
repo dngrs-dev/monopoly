@@ -14,6 +14,12 @@ class OwnableTile(Tile):  # Base class, rent calculated in tile handler
     owner: int | None = None
     mortgaged: bool = False
 
+    def mortgage_value(self) -> int:
+        return self.price // 2
+
+    def unmortgage_value(self) -> int:
+        return int(self.price * 0.55)
+
 
 @dataclass
 class StreetTile(OwnableTile):
@@ -26,6 +32,18 @@ class StreetTile(OwnableTile):
     ]  # index 0 = no houses, other -> number of improvement level
     improvement_level: int = 0
     improvement_sell_price_multiplier: float = 0.5
+
+    def improvement_buy_price(self) -> int:
+        if isinstance(self.improvement_prices, int):
+            return self.improvement_prices
+        return self.improvement_prices[self.improvement_level]
+
+    def improvement_sell_price(self) -> int:
+        if isinstance(self.improvement_prices, int):
+            last_improvement_price = self.improvement_prices
+        else:
+            last_improvement_price = self.improvement_prices[self.improvement_level - 1]
+        return int(last_improvement_price * self.improvement_sell_price_multiplier)
 
 
 @dataclass

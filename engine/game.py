@@ -4,7 +4,7 @@ from enum import Enum, auto
 from engine.board import Board
 from engine.player import Player
 from engine.dice import Dice
-from engine.events import Event
+from engine.events import Event, MoveReason, PlayerMoved, PlayerPaidMoney, PlayerWentToJail
 from engine.choices import (
     Choice,
     PayFineChoice,
@@ -50,6 +50,156 @@ class Game:
     def current_player(self) -> Player:
         return self.players[self.current_player_index]
 
+    def get_player(self, player_id: int) -> Player:
+        player = next((p for p in self.players if p.id == player_id), None)
+        if player is None:
+            raise ValueError("Player not found")
+        return player
+
+    def active_players(self, *, exclude_ids: set[int] | None = None) -> list[Player]:
+        exclude = exclude_ids or set()
+        return [p for p in self.players if not p.bankrupt and p.id not in exclude]
+
+    def active_player_ids(self, *, exclude_ids: set[int] | None = None) -> list[int]:
+        return [p.id for p in self.active_players(exclude_ids=exclude_ids)]
+
+    def send_player_to_jail(self, player: Player, *, reason: MoveReason) -> list[Event]:
+        from_position = player.position
+        jail_position = self.board.find_tile_position(JailTile)
+        player.position = jail_position
+        player.in_jail = True
+        player.skip_turns = self.board.get_tile(jail_position).skip_turns
+        return [
+            PlayerMoved(
+                player_id=player.id,
+                from_position=from_position,
+                to_position=player.position,
+                reason=reason,
+            ),
+            PlayerWentToJail(player_id=player.id),
+        ]
+
+    def move_current_player_and_resolve_tile(
+        self,
+        *,
+        steps: int,
+        reason: MoveReason,
+    ) -> tuple["Game", list[Event], list[Choice]]:
+        from engine.tile_handlers import resolve_tile
+
+        events: list[Event] = []
+        player = self.current_player()
+        from_position = player.position
+        move_events = player.move_steps(steps, self.board)
+        events.append(
+            PlayerMoved(
+                player_id=player.id,
+                from_position=from_position,
+                to_position=player.position,
+                steps=steps,
+                reason=reason,
+            )
+        )
+        events.extend(move_events)
+        game, tile_events, tile_choices = resolve_tile(
+            self.board.get_tile(player.position), self
+        )
+        events.extend(tile_events)
+        return game, events, tile_choices
+
+    def pay_each_player(
+        self,
+        *,
+        payer_id: int,
+        amount: int,
+        payee_ids: list[int] | None = None,
+    ) -> list[Event]:
+        payer = self.get_player(payer_id)
+        if payee_ids is None:
+            payee_ids = self.active_player_ids(exclude_ids={payer_id})
+        else:
+            payee_ids = [
+                player_id
+                for player_id in payee_ids
+                if player_id != payer_id and not self.get_player(player_id).bankrupt
+            ]
+
+        events: list[Event] = []
+        for payee_id in payee_ids:
+            payee = self.get_player(payee_id)
+            payer.update_balance(-amount)
+            payee.update_balance(amount)
+            events.append(
+                PlayerPaidMoney(
+                    player_id=payer_id,
+                    amount=-amount,
+                    reason="card_pay_each_player",
+                )
+            )
+            events.append(
+                PlayerPaidMoney(
+                    player_id=payee_id,
+                    amount=amount,
+                    reason="card_receive_from_each_player",
+                )
+            )
+
+        return events
+
+    def collect_from_each_player(
+        self,
+        *,
+        payee_id: int,
+        payer_ids: list[int],
+        amount: int,
+        end_turn: bool,
+    ) -> tuple["Game", list[Event], list[Choice]]:
+        events: list[Event] = []
+        choices: list[Choice] = []
+        payee = self.get_player(payee_id)
+
+        filtered_payer_ids = [
+            payer_id
+            for payer_id in payer_ids
+            if not self.get_player(payer_id).bankrupt
+        ]
+
+        for index, payer_id in enumerate(filtered_payer_ids):
+            payer = self.get_player(payer_id)
+            if payer.balance < amount:
+                self.pending_payment = PendingPayment(
+                    debtor_player_id=payer_id,
+                    creditor_player_id=payee_id,
+                    amount=amount,
+                    reason="card_collect_from_each_player",
+                    per_player_amount=amount,
+                    remaining_player_ids=filtered_payer_ids[index + 1 :],
+                )
+                self.turn_phase = TurnPhase.AWAIT_CHOICE
+                return self, events, build_available_choices(self)
+
+            payer.update_balance(-amount)
+            payee.update_balance(amount)
+            events.append(
+                PlayerPaidMoney(
+                    player_id=payer_id,
+                    amount=-amount,
+                    reason="card_pay_each_player",
+                )
+            )
+            events.append(
+                PlayerPaidMoney(
+                    player_id=payee_id,
+                    amount=amount,
+                    reason="card_receive_from_each_player",
+                )
+            )
+
+        self.pending_payment = None
+        if end_turn:
+            self.turn_phase = TurnPhase.END_TURN
+        return self, events, choices
+
 
 def _build_asset_management_choices(
     game: Game,
@@ -69,11 +219,7 @@ def _build_asset_management_choices(
 
             if include_buy_improvements and owns_monopoly:
                 if tile.improvement_level < len(tile.rent_schedule) - 1:
-                    improvement_price = (
-                        tile.improvement_prices
-                        if isinstance(tile.improvement_prices, int)
-                        else tile.improvement_prices[tile.improvement_level]
-                    )
+                    improvement_price = tile.improvement_buy_price()
                     choices.append(
                         BuyImprovementChoice(
                             player_id=player.id,
@@ -84,14 +230,7 @@ def _build_asset_management_choices(
 
             if include_sell_improvements:
                 if tile.improvement_level > 0:
-                    last_improvement_price = (
-                        tile.improvement_prices
-                        if isinstance(tile.improvement_prices, int)
-                        else tile.improvement_prices[tile.improvement_level - 1]
-                    )
-                    improvement_sell_price = int(
-                        last_improvement_price * tile.improvement_sell_price_multiplier
-                    )
+                    improvement_sell_price = tile.improvement_sell_price()
                     choices.append(
                         SellImprovementChoice(
                             player_id=player.id,
@@ -114,7 +253,7 @@ def _build_asset_management_choices(
                 MortgagePropertyChoice(
                     player_id=player.id,
                     property_position=pos,
-                    mortgage_value=tile.price // 2,
+                    mortgage_value=tile.mortgage_value(),
                 )
             )
 
@@ -123,7 +262,7 @@ def _build_asset_management_choices(
                 UnmortgagePropertyChoice(
                     player_id=player.id,
                     property_position=pos,
-                    unmortgage_value=int(tile.price * 0.55),
+                    unmortgage_value=tile.unmortgage_value(),
                 )
             )
 
@@ -146,11 +285,10 @@ def _build_turn_choices(game: Game) -> list[Choice]:
     else:
         choices = [RollDiceChoice(player_id=player.id)]
 
-    for p in game.players:
-        if p.id != player.id and not p.bankrupt:
-            choices.append(
-                MakeTradeOfferChoice(player_id=player.id, receiving_player_id=p.id)
-            )
+    for p in game.active_players(exclude_ids={player.id}):
+        choices.append(
+            MakeTradeOfferChoice(player_id=player.id, receiving_player_id=p.id)
+        )
 
     choices.extend(
         _build_asset_management_choices(
@@ -171,9 +309,7 @@ def _build_pending_payment_choices(game: Game) -> list[Choice]:
     if pending is None:
         raise ValueError("No pending payment")
 
-    player = next((p for p in game.players if p.id == pending.debtor_player_id), None)
-    if player is None:
-        raise ValueError("Pending payment debtor not found")
+    player = game.get_player(pending.debtor_player_id)
 
     choices: list[Choice] = []
     choices.extend(
