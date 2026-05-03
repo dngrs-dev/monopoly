@@ -438,6 +438,12 @@ def _(choice: AuctionBidChoice, game: Game) -> tuple[Game, list[Event], list[Cho
         raise ValueError("Bid choice tile position does not match active auction")
     if choice.player_id not in game.auction.active_player_ids:
         raise ValueError("Player is not an active bidder in this auction")
+    if choice.bid != game.auction.active_bid():
+        raise ValueError("Bid amount does not match current auction bid")
+
+    bidder = _get_player_by_id(game, choice.player_id)
+    if bidder.balance < choice.bid:
+        raise ValueError("Player cannot afford this bid")
 
     events: list[Event] = []
     choices: list[Choice] = []
@@ -450,16 +456,19 @@ def _(choice: AuctionBidChoice, game: Game) -> tuple[Game, list[Event], list[Cho
 
     if auction.check_auction_end():
         # If nobody bid or everyone passed, the property stays unowned.
-        if not auction.active_player_ids or auction.last_bid_amount is None:
+        if not auction.active_player_ids or auction.last_bid_amount is None or auction.last_bidder_id is None:
             game.auction = None
             game.turn_phase = TurnPhase.END_TURN
             return game, events, choices
 
-        winning_player_id = auction.active_player_ids[0]
+        winning_player_id = auction.last_bidder_id
         winning_bid = auction.last_bid_amount
         tile = game.board.get_tile(auction.tile_position)
         if not isinstance(tile, OwnableTile):
             raise ValueError("Auctioned tile is not a property")
+
+        if winning_player_id not in auction.active_player_ids:
+            raise ValueError("Winning bidder is not an active auction participant")
 
         # Transfer ownership of the property to the winning bidder
         tile.owner = winning_player_id
@@ -517,21 +526,29 @@ def _(choice: AuctionPassChoice, game: Game) -> tuple[Game, list[Event], list[Ch
 
     # Remove the player from active bidders
     auction = game.auction
-    auction.active_player_ids.remove(choice.player_id)
+    removed_index = auction.active_player_ids.index(choice.player_id)
+    auction.active_player_ids.pop(removed_index)
+    if removed_index < auction.cursor_index:
+        auction.cursor_index -= 1
+    if auction.active_player_ids and auction.cursor_index >= len(auction.active_player_ids):
+        auction.cursor_index = 0
 
     # Check if the auction has ended
     if auction.check_auction_end():
         # If nobody bid or everyone passed, the property stays unowned.
-        if not auction.active_player_ids or auction.last_bid_amount is None:
+        if not auction.active_player_ids or auction.last_bid_amount is None or auction.last_bidder_id is None:
             game.auction = None
             game.turn_phase = TurnPhase.END_TURN
             return game, events, choices
 
-        winning_player_id = auction.active_player_ids[0]
+        winning_player_id = auction.last_bidder_id
         winning_bid = auction.last_bid_amount
         tile = game.board.get_tile(auction.tile_position)
         if not isinstance(tile, OwnableTile):
             raise ValueError("Auctioned tile is not a property")
+
+        if winning_player_id not in auction.active_player_ids:
+            raise ValueError("Winning bidder is not an active auction participant")
 
         # Transfer ownership of the property to the winning bidder
         tile.owner = winning_player_id
@@ -552,11 +569,6 @@ def _(choice: AuctionPassChoice, game: Game) -> tuple[Game, list[Event], list[Ch
         # End the turn after the auction concludes
         game.turn_phase = TurnPhase.END_TURN
     else:
-        # Move cursor to the next active bidder
-        auction.cursor_index = (auction.cursor_index + 1) % len(
-            auction.active_player_ids
-        )
-
         # Generate choices for the next bidder
         next_bidder_id = auction.active_player_id()
         choices.append(
