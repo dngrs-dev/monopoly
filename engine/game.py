@@ -39,6 +39,8 @@ class Game:
     players: list[Player]
     dice: Dice
     current_player_index: int = 0
+    doubles_in_row: int = 0
+    pending_extra_turn: bool = False
     turn_phase: TurnPhase = TurnPhase.AWAIT_CHOICE
     rules: Rules = field(default_factory=Rules)
     auction: Auction | None = None
@@ -212,10 +214,12 @@ def start_game(game: Game) -> tuple[Game, list[Event], list[Choice]]:
 
 def end_turn(game: Game) -> tuple[Game, list[Event], list[Choice]]:
     # Advance to the next non-bankrupt player.
-    for _ in range(len(game.players)):
-        game.current_player_index = (game.current_player_index + 1) % len(game.players)
-        if not game.current_player().bankrupt:
-            break
+    if not game.pending_extra_turn:
+        game.doubles_in_row = 0
+        for _ in range(len(game.players)):
+            game.current_player_index = (game.current_player_index + 1) % len(game.players)
+            if not game.current_player().bankrupt:
+                break
     game.turn_phase = TurnPhase.AWAIT_CHOICE
     return game, [], build_available_choices(game)
 

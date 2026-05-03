@@ -6,3 +6,4 @@ class Rules:
     double_rent_on_monopoly: bool = True # Owning all properties in a group doubles the rent for those properties
     auction_enabled: bool = False  # If player declines to buy a property
     evenly_improve: bool = True  # Must improve properties in a group evenly
+    max_doubles_in_row: int = 3  # Max number of doubles rolls in a row before going to jail

@@ -39,6 +39,7 @@ from engine.events import (
     PlayerPaidRent,
     PlayerPaidFine,
     PlayerPaidMoney,
+    PlayerWentToJail,
 )
 from engine.tiles import OwnableTile, StreetTile, JailTile
 from engine.tile_handlers import resolve_tile, _calculate_rent
@@ -127,6 +128,34 @@ def _(choice: RollDiceChoice, game: Game) -> tuple[Game, list[Event], list[Choic
         raise ValueError("Player is in jail and cannot roll dice")
 
     dice1, dice2 = game.dice.roll()
+    game.pending_extra_turn = False
+    if dice1 == dice2:
+        game.doubles_in_row += 1
+        if game.doubles_in_row >= game.rules.max_doubles_in_row:
+            # Send player to jail
+            from_position = player.position
+            jail_position = next(
+                (i for i, t in enumerate(game.board.tiles) if isinstance(t, JailTile)), None
+            )
+            if jail_position is None:
+                raise ValueError("Board does not have a Jail tile")
+            player.position = jail_position
+            player.in_jail = True
+            player.skip_turns = game.board.get_tile(jail_position).skip_turns
+            events.append(
+                PlayerMoved(
+                    player_id=player.id,
+                    from_position=from_position,
+                    to_position=player.position,
+                    reason=MoveReason.TILE_EFFECT,
+                )
+            )
+            events.append(PlayerWentToJail(player_id=player.id))
+            
+            game.turn_phase = TurnPhase.END_TURN
+            return game, events, choices
+        game.pending_extra_turn = True
+
     roll = dice1 + dice2
     from_position = player.position
     move_events = player.move_steps(roll, game.board)
@@ -169,7 +198,8 @@ def _(choice: BuyPropertyChoice, game: Game) -> tuple[Game, list[Event], list[Ch
         raise ValueError("Player cannot afford this property")
     if tile.price != choice.price:
         raise ValueError("Offer price does not match property price")
-    pos = game.board.get_tile_position(choice.property_position)
+    choice_tile = game.board.get_tile(choice.property_position)
+    pos = game.board.get_tile_position(choice_tile)
     if game.board.get_tile(choice.property_position) != tile:
         raise ValueError("Property position does not match current tile")
 
@@ -235,7 +265,6 @@ def _(choice: PayFineChoice, game: Game) -> tuple[Game, list[Event], list[Choice
     _assert_turn(game, choice.player_id, choice)
 
     events: list[Event] = []
-    choices: list[Choice] = []
 
     player = game.current_player()
     tile = game.board.get_tile(player.position)
@@ -253,8 +282,9 @@ def _(choice: PayFineChoice, game: Game) -> tuple[Game, list[Event], list[Choice
     player.skip_turns = 0
     events.append(PlayerPaidJailFine(player_id=player.id, amount=choice.fine))
     events.append(PlayerReleasedFromJail(player_id=player.id))
-    game.turn_phase = TurnPhase.END_TURN
-    return game, events, choices
+    
+    game.turn_phase = TurnPhase.AWAIT_CHOICE
+    return game, events, build_available_choices(game)
 
 
 @apply_choice.register
