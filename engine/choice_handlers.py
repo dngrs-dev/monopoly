@@ -123,6 +123,14 @@ def _collect_from_each_player(
     choices: list[Choice] = []
     payee = _get_player_by_id(game, payee_id)
 
+    filtered_payer_ids: list[int] = []
+    for payer_id in payer_ids:
+        payer = _get_player_by_id(game, payer_id)
+        if payer.bankrupt:
+            continue
+        filtered_payer_ids.append(payer_id)
+    payer_ids = filtered_payer_ids
+
     for index, payer_id in enumerate(payer_ids):
         payer = _get_player_by_id(game, payer_id)
         if payer.balance < amount:
@@ -940,7 +948,7 @@ def _(
         if pending.per_player_amount is None:
             raise ValueError("Pending payment missing per-player amount")
         for other_player in game.players:
-            if other_player.id == debtor.id:
+            if other_player.id == debtor.id or other_player.bankrupt:
                 continue
             debtor.update_balance(-pending.per_player_amount)
             other_player.update_balance(pending.per_player_amount)
@@ -984,7 +992,11 @@ def _(
             )
         )
 
-        remaining = pending.remaining_player_ids
+        remaining = [
+            payer_id
+            for payer_id in pending.remaining_player_ids
+            if not _get_player_by_id(game, payer_id).bankrupt
+        ]
         game.pending_payment = None
         if remaining:
             per_player_amount = pending.per_player_amount or pending.amount

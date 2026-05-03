@@ -195,7 +195,7 @@ def _(card: PayEachPlayerCard, game: Game) -> tuple[Game, list[Event], list[Choi
     events: list[Event] = []
     choices: list[Choice] = []
     game.board.get_tile(player.position).deck.discard_card(card)
-    other_players = [p for p in game.players if p.id != player.id]
+    other_players = [p for p in game.players if p.id != player.id and not p.bankrupt]
     total_payment = card.amount * len(other_players)
     if total_payment > 0 and player.balance < total_payment:
         game.pending_payment = PendingPayment(
@@ -234,7 +234,7 @@ def _(card: CollectFromEachPlayerCard, game: Game) -> tuple[Game, list[Event], l
     events: list[Event] = []
     choices: list[Choice] = []
     game.board.get_tile(player.position).deck.discard_card(card)
-    payer_ids = [p.id for p in game.players if p.id != player.id]
+    payer_ids = [p.id for p in game.players if p.id != player.id and not p.bankrupt]
     for index, payer_id in enumerate(payer_ids):
         other_player = next((p for p in game.players if p.id == payer_id), None)
         if other_player is None:
