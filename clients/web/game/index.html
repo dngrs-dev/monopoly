@@ -25,27 +25,52 @@
     <h2>Events</h2>
     <pre id="events">(none)</pre>
 
-    <h2>Trade</h2>
-    <div>
-      <div>
-        <strong>Offered money</strong>
-        <input id="trade_offered_money" type="number" value="0" min="0" />
-      </div>
-      <div>
-        <strong>Requested money</strong>
-        <input id="trade_requested_money" type="number" value="0" min="0" />
+    <h2>Players</h2>
+    <div id="players"></div>
+
+    <section id="trade-panel" hidden>
+      <h2 id="trade-title">Trade</h2>
+      <div id="trade-subtitle"></div>
+      <p id="trade-error" role="alert"></p>
+
+      <div id="trade-money">
+        <div>
+          <strong>Offered money</strong>
+          <input id="trade-offered-money" type="number" value="0" min="0" />
+          <span id="trade-offered-max"></span>
+        </div>
+        <div>
+          <strong>Requested money</strong>
+          <input id="trade-requested-money" type="number" value="0" min="0" />
+          <span id="trade-requested-max"></span>
+        </div>
       </div>
 
-      <div style="margin-top: 8px">
-        <div><strong>Offer (your properties)</strong></div>
-        <div id="trade_offered_props">(none)</div>
+      <div id="trade-properties">
+        <div>
+          <strong>Your properties</strong>
+          <div id="trade-offered-buttons"></div>
+        </div>
+        <div>
+          <strong>Their properties</strong>
+          <div id="trade-requested-buttons"></div>
+        </div>
       </div>
 
-      <div style="margin-top: 8px">
-        <div><strong>Request (their properties)</strong></div>
-        <div id="trade_requested_props">(none)</div>
+      <div>
+        <strong>Offered list</strong>
+        <ul id="trade-offered-list"></ul>
       </div>
-    </div>
+      <div>
+        <strong>Requested list</strong>
+        <ul id="trade-requested-list"></ul>
+      </div>
+
+      <div>
+        <button id="trade-accept">Accept</button>
+        <button id="trade-close">Close</button>
+      </div>
+    </section>
 
     <h2>Choices</h2>
     <div class="choices" id="choices"></div>

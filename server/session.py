@@ -72,6 +72,9 @@ class GameSession:
             "board_size": self.game.board.size(),
             "tiles": [to_jsonable(t) for t in self.game.board.tiles],
             "auction": to_jsonable(self.game.auction) if self.game.auction else None,
+            "trade_offer": (
+                to_jsonable(self.game.trade_offer) if self.game.trade_offer else None
+            ),
             "pending_payment": (
                 to_jsonable(self.game.pending_payment)
                 if self.game.pending_payment

@@ -467,8 +467,7 @@ def _(
     game.get_player(choice.receiving_player_id)  # Validate receiving player exists
 
     events: list[Event] = []
-    choices: list[Choice] = []
-
+    choices: list[Choice] = build_available_choices(game)
     choices.append(
         SendTradeOfferChoice(
             player_id=choice.player_id,
