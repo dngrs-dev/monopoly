@@ -10,7 +10,7 @@ class Tile:
 @dataclass(kw_only=True)
 class OwnableTile(Tile):  # Base class, rent calculated in tile handler
     price: int
-    rent: int
+    rent: int = 0
     owner: int | None = None
     mortgaged: bool = False
 
