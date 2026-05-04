@@ -32,6 +32,10 @@
 				<strong id="current-username">(loading)</strong>
 				<button id="edit-username" disabled>Change</button>
 			</div>
+			<div>Handle: <span id="profile-handle">(loading)</span></div>
+			<div>
+				Profile link: <a id="profile-link" href="/profile">(loading)</a>
+			</div>
 			<div id="username-editor" hidden>
 				<label>
 					New username
@@ -40,6 +44,17 @@
 				<button id="save-username" disabled>Save</button>
 				<button id="cancel-username" disabled>Cancel</button>
 			</div>
+		</section>
+
+		<section id="username-history-section">
+			<h2>Username history</h2>
+			<ul id="username-history"></ul>
+		</section>
+
+		<section>
+			<h2>Statistics</h2>
+			<div>Games played: <span id="stats-played">0</span></div>
+			<div>Wins: <span id="stats-wins">0</span></div>
 		</section>
 
 		<section>

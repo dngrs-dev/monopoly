@@ -18,7 +18,6 @@ const joinPrivateBtn = document.getElementById("join-private");
 const statusEl = document.getElementById("ws-status");
 const loginBtn = document.getElementById("login");
 const logoutBtn = document.getElementById("logout");
-const changeUsernameBtn = document.getElementById("change-username");
 const profileBtn = document.getElementById("profile");
 const currentUserEl = document.getElementById("current-user");
 const errEl = document.getElementById("err");
@@ -81,7 +80,6 @@ function renderAuthState() {
   if (joinPrivateBtn)
     joinPrivateBtn.disabled = !canUseLobby || !!currentLobby;
   if (logoutBtn) logoutBtn.disabled = !authed;
-  if (changeUsernameBtn) changeUsernameBtn.disabled = !authed;
   if (profileBtn) profileBtn.disabled = !authed;
   if (currentUserEl)
     currentUserEl.textContent = currentUser?.username || "(not signed in)";
@@ -345,7 +343,8 @@ loginBtn.onclick = () => {
 
 if (profileBtn) {
   profileBtn.onclick = () => {
-    window.location.href = "/profile";
+    const handle = currentUser?.handle || "";
+    window.location.href = handle ? `/profile/${handle}` : "/profile";
   };
 }
 
@@ -366,42 +365,6 @@ logoutBtn.onclick = async () => {
   renderAuthState();
   renderLobbyList();
   renderCurrentLobby();
-};
-
-changeUsernameBtn.onclick = async () => {
-  setError("");
-  await checkAuth();
-  if (!authed || !currentUser) return;
-
-  const next = window.prompt(
-    "Choose a new username (1-32 chars)",
-    currentUser.username,
-  );
-  if (next === null) return;
-
-  const username = next.trim();
-  if (!username) {
-    setError("Username is required");
-    return;
-  }
-
-  const res = await fetch("/api/auth/username", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "same-origin",
-    body: JSON.stringify({ username }),
-  });
-
-  const data = await res.json().catch(() => null);
-  if (!res.ok) {
-    setError(data?.detail || "Could not update username");
-    return;
-  }
-
-  currentUser = data?.user || currentUser;
-  renderAuthState();
-  renderCurrentLobby();
-  renderLobbyList();
 };
 
 if (createLobbyBtn) {

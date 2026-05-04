@@ -19,7 +19,7 @@ from fastapi import (
     UploadFile,
     File,
 )
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from jose import JWTError, jwt
@@ -115,6 +115,14 @@ async def _require_user_ws(ws: WebSocket) -> User | None:
     return await run_in_threadpool(auth_db.get_user_by_id, user_id)
 
 
+async def _get_user_optional(request: Request) -> User | None:
+    token = request.cookies.get(COOKIE_NAME)
+    user_id = _parse_token(token) if token else None
+    if not user_id:
+        return None
+    return await run_in_threadpool(auth_db.get_user_by_id, user_id)
+
+
 def _validate_email(value: str) -> str:
     email = normalize_email(value)
     if not (3 <= len(email) <= 320):
@@ -153,6 +161,14 @@ def _validate_username(value: str) -> str:
 
 def _avatar_path(user_id: str) -> Path:
     return AVATAR_DIR / f"{user_id}.png"
+
+
+def _avatar_response_for(user: User) -> Response | FileResponse:
+    path = _avatar_path(user.id)
+    headers = {"Cache-Control": "no-store"}
+    if path.exists():
+        return FileResponse(path, media_type="image/png", headers=headers)
+    return FileResponse(DEFAULT_AVATAR_PATH, media_type="image/svg+xml", headers=headers)
 
 
 class RegisterIn(BaseModel):
@@ -247,7 +263,17 @@ async def game_page() -> FileResponse:
 
 
 @app.get("/profile")
-async def profile_page() -> FileResponse:
+async def profile_page(request: Request):
+    try:
+        user = await _require_user_http(request)
+    except HTTPException:
+        return RedirectResponse("/", status_code=302)
+
+    return RedirectResponse(f"/profile/{user.handle}", status_code=302)
+
+
+@app.get("/profile/{handle}")
+async def profile_page_handle(handle: str):
     return FileResponse(_WEB_DIR / "profile" / "index.html")
 
 
@@ -277,7 +303,12 @@ async def register(data: RegisterIn, response: Response):
 
     return {
         "ok": True,
-        "user": {"user_id": user.id, "username": user.username, "email": user.email},
+        "user": {
+            "user_id": user.id,
+            "username": user.username,
+            "handle": user.handle,
+            "email": user.email,
+        },
     }
 
 
@@ -305,14 +336,24 @@ async def login(data: LoginIn, response: Response):
     )
     return {
         "ok": True,
-        "user": {"user_id": user.id, "username": user.username, "email": user.email},
+        "user": {
+            "user_id": user.id,
+            "username": user.username,
+            "handle": user.handle,
+            "email": user.email,
+        },
     }
 
 
 @app.get("/api/auth/me")
 async def auth_me(request: Request):
     user = await _require_user_http(request)
-    return {"user_id": user.id, "username": user.username, "email": user.email}
+    return {
+        "user_id": user.id,
+        "username": user.username,
+        "handle": user.handle,
+        "email": user.email,
+    }
 
 
 @app.post("/api/auth/username")
@@ -334,6 +375,7 @@ async def update_username(data: UpdateUsernameIn, request: Request):
         "user": {
             "user_id": updated.id,
             "username": updated.username,
+            "handle": updated.handle,
             "email": updated.email,
         },
     }
@@ -345,16 +387,58 @@ async def logout(response: Response):
     return {"ok": True}
 
 
+@app.get("/api/profile/me")
+async def profile_me(request: Request):
+    user = await _require_user_http(request)
+    stats = await run_in_threadpool(auth_db.get_user_stats, user.id)
+    history = await run_in_threadpool(auth_db.get_username_history, user.id)
+    return {
+        "user_id": user.id,
+        "username": user.username,
+        "handle": user.handle,
+        "stats": stats,
+        "history": history,
+        "is_self": True,
+        "profile_link": f"/profile/{user.handle}",
+    }
+
+
+@app.get("/api/profile/handle/{handle}")
+async def profile_by_handle(handle: str, request: Request):
+    viewer = await _get_user_optional(request)
+    target = await run_in_threadpool(auth_db.get_user_by_handle, handle)
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    stats = await run_in_threadpool(auth_db.get_user_stats, target.id)
+    history: list[dict[str, str]] = []
+    is_self = viewer is not None and viewer.id == target.id
+    if is_self:
+        history = await run_in_threadpool(auth_db.get_username_history, target.id)
+
+    return {
+        "user_id": target.id,
+        "username": target.username,
+        "handle": target.handle,
+        "stats": stats,
+        "history": history,
+        "is_self": is_self,
+        "profile_link": f"/profile/{target.handle}",
+    }
+
+
 @app.get("/api/profile/avatar")
 async def get_avatar(request: Request):
     user = await _require_user_http(request)
-    path = _avatar_path(user.id)
-    headers = {"Cache-Control": "no-store"}
-    if path.exists():
-        return FileResponse(path, media_type="image/png", headers=headers)
-    return FileResponse(
-        DEFAULT_AVATAR_PATH, media_type="image/svg+xml", headers=headers
-    )
+    return _avatar_response_for(user)
+
+
+@app.get("/api/profile/avatar/{handle}")
+async def get_avatar_by_handle(handle: str):
+    target = await run_in_threadpool(auth_db.get_user_by_handle, handle)
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return _avatar_response_for(target)
 
 
 @app.post("/api/profile/avatar")

@@ -2,6 +2,12 @@ const $ = (id) => document.getElementById(id);
 
 const currentUserEl = $("current-user");
 const currentUsernameEl = $("current-username");
+const profileHandleEl = $("profile-handle");
+const profileLinkEl = $("profile-link");
+const usernameHistorySection = $("username-history-section");
+const usernameHistoryEl = $("username-history");
+const statsPlayedEl = $("stats-played");
+const statsWinsEl = $("stats-wins");
 const statusEl = $("status");
 const errEl = $("err");
 const avatarPreview = $("avatar-preview");
@@ -18,6 +24,8 @@ const MAX_AVATAR_BYTES = 1024 * 1024; // 1 MB
 const AVATAR_SIZE = 256;
 
 let currentUser = null;
+let profileData = null;
+let viewingHandle = null;
 
 function setError(text) {
 	if (errEl) errEl.textContent = text || "";
@@ -55,6 +63,14 @@ function closeUsernameEditor() {
 	if (editUsernameBtn) editUsernameBtn.disabled = false;
 }
 
+function getHandleFromPath() {
+	const parts = window.location.pathname.split("/").filter(Boolean);
+	if (parts[0] !== "profile") return null;
+	if (parts.length < 2) return null;
+	const handle = decodeURIComponent(parts[1] || "").trim();
+	return handle || null;
+}
+
 async function fetchMe() {
 	try {
 		const res = await fetch("/api/auth/me", { credentials: "same-origin" });
@@ -66,15 +82,28 @@ async function fetchMe() {
 	}
 }
 
-function loadAvatar() {
-	if (!currentUser) return;
+async function fetchProfile(handle) {
+	const url = handle
+		? `/api/profile/handle/${encodeURIComponent(handle)}`
+		: "/api/profile/me";
+	const res = await fetch(url, { credentials: "same-origin" });
+	if (res.status === 401) return null;
+	if (!res.ok) return null;
+	return await res.json();
+}
+
+function loadAvatar(profile, isSelf) {
+	if (!profile?.handle) return;
 	const ts = Date.now();
-	setAvatarPreview(`/api/profile/avatar?ts=${ts}`);
-	if (avatarClear) avatarClear.disabled = false;
+	const url = isSelf
+		? `/api/profile/avatar?ts=${ts}`
+		: `/api/profile/avatar/${encodeURIComponent(profile.handle)}?ts=${ts}`;
+	setAvatarPreview(url);
+	if (avatarClear) avatarClear.disabled = !isSelf;
 }
 
 async function clearAvatar() {
-	if (!currentUser) return;
+	if (!profileData?.is_self) return;
 	const res = await fetch("/api/profile/avatar", {
 		method: "DELETE",
 		credentials: "same-origin",
@@ -83,7 +112,7 @@ async function clearAvatar() {
 		setError("Could not clear avatar");
 		return;
 	}
-	loadAvatar();
+	loadAvatar(profileData, true);
 }
 
 function loadImageFromFile(file) {
@@ -132,7 +161,7 @@ async function cropAvatar(file) {
 }
 
 async function saveAvatar(file) {
-	if (!currentUser) return;
+	if (!profileData?.is_self) return;
 	if (!file) return;
 	if (!file.type.startsWith("image/")) {
 		setError("Please select an image file");
@@ -170,12 +199,12 @@ async function saveAvatar(file) {
 	const previewUrl = URL.createObjectURL(blob);
 	setAvatarPreview(previewUrl);
 	window.setTimeout(() => URL.revokeObjectURL(previewUrl), 1000);
-	loadAvatar();
+	loadAvatar(profileData, true);
 	setError("");
 }
 
 async function saveUsername() {
-	if (!currentUser) return;
+	if (!profileData?.is_self) return;
 	const username = (usernameInput?.value || "").trim();
 	if (!username) {
 		setError("Username is required");
@@ -195,12 +224,75 @@ async function saveUsername() {
 		return;
 	}
 
-	currentUser = data?.user || currentUser;
-	if (currentUserEl) currentUserEl.textContent = currentUser.username;
-	if (currentUsernameEl) currentUsernameEl.textContent = currentUser.username;
+	if (data?.user) {
+		currentUser = data.user;
+	}
+	await refreshProfile();
 	closeUsernameEditor();
 	setStatus("Username updated");
 	setError("");
+}
+
+function renderHistory(history, show) {
+	if (!usernameHistoryEl) return;
+	usernameHistoryEl.innerHTML = "";
+
+	if (!show) {
+		usernameHistoryEl.textContent = "(hidden)";
+		return;
+	}
+
+	if (!Array.isArray(history) || history.length === 0) {
+		usernameHistoryEl.textContent = "(none)";
+		return;
+	}
+
+	for (const item of history) {
+		const li = document.createElement("li");
+		li.textContent = item.username || "(unknown)";
+		usernameHistoryEl.appendChild(li);
+	}
+}
+
+function renderStats(stats) {
+	if (statsPlayedEl)
+		statsPlayedEl.textContent = String(stats?.games_played ?? 0);
+	if (statsWinsEl) statsWinsEl.textContent = String(stats?.wins ?? 0);
+}
+
+function renderProfile() {
+	if (!profileData) return;
+
+	const isSelf = !!profileData.is_self;
+
+	if (currentUsernameEl)
+		currentUsernameEl.textContent = profileData.username || "(unknown)";
+	if (profileHandleEl)
+		profileHandleEl.textContent = profileData.handle || "(unknown)";
+	if (profileLinkEl) {
+		profileLinkEl.textContent = profileData.profile_link || "(unknown)";
+		profileLinkEl.href = profileData.profile_link || "/profile";
+	}
+
+	renderStats(profileData.stats || { games_played: 0, wins: 0 });
+	if (usernameHistorySection)
+		usernameHistorySection.hidden = !isSelf;
+	renderHistory(profileData.history, isSelf);
+
+	setAvatarControlsEnabled(isSelf);
+	setUsernameControlsEnabled(isSelf);
+	if (usernameInput) usernameInput.value = profileData.username || "";
+	closeUsernameEditor();
+	loadAvatar(profileData, isSelf);
+}
+
+async function refreshProfile() {
+	profileData = await fetchProfile(viewingHandle);
+	if (!profileData) {
+		setError("Profile not found or not accessible");
+		return;
+	}
+	renderProfile();
 }
 
 if (avatarInput) {
@@ -224,10 +316,10 @@ if (avatarClear) {
 
 if (editUsernameBtn) {
 	editUsernameBtn.addEventListener("click", () => {
-		if (!currentUser) return;
+		if (!profileData?.is_self) return;
 		setStatus("");
 		setError("");
-		if (usernameInput) usernameInput.value = currentUser.username;
+		if (usernameInput) usernameInput.value = profileData.username || "";
 		openUsernameEditor();
 	});
 }
@@ -256,6 +348,7 @@ if (backLobbyBtn) {
 
 (async function start() {
 	setStatus("Loading...");
+	viewingHandle = getHandleFromPath();
 	currentUser = await fetchMe();
 
 	if (!currentUser) {
@@ -269,11 +362,6 @@ if (backLobbyBtn) {
 	}
 
 	if (currentUserEl) currentUserEl.textContent = currentUser.username;
-	if (currentUsernameEl) currentUsernameEl.textContent = currentUser.username;
-	if (usernameInput) usernameInput.value = currentUser.username;
 	setStatus("");
-	setAvatarControlsEnabled(true);
-	setUsernameControlsEnabled(true);
-	closeUsernameEditor();
-	loadAvatar();
+	await refreshProfile();
 })();
