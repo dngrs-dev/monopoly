@@ -2,6 +2,8 @@ import asyncio
 from typing import Any
 from pathlib import Path
 from uuid import uuid4
+import time
+import secrets
 
 import os
 from dotenv import load_dotenv
@@ -43,6 +45,7 @@ from server.protocol import (
     is_choose,
     is_lobby_create,
     is_lobby_join,
+    is_lobby_join_invite,
     is_lobby_leave,
     is_lobby_start,
     is_lobby_list,
@@ -170,6 +173,7 @@ auth_db = AuthDb(DB_PATH)
 @app.on_event("startup")
 def _startup() -> None:
     auth_db.init()
+    asyncio.create_task(_lobby_cleanup_loop())
 
 
 app.mount("/static", StaticFiles(directory=str(_WEB_DIR), html=True), name="web")
@@ -180,6 +184,11 @@ DEFAULT_START_BALANCE = 500
 LOBBY_LIMIT_MIN = 1
 LOBBY_LIMIT_MAX = 8
 LOBBY_DEFAULT_LIMIT = 4
+LOBBY_TTL_SECONDS = 60 * 10
+LOBBY_CLEANUP_INTERVAL_SECONDS = 30
+
+INVITE_CODE_LENGTH = 6
+INVITE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 rooms_lock = asyncio.Lock()
 rooms: dict[str, dict[str, Any]] = {}
@@ -197,13 +206,16 @@ lobbies: dict[str, dict[str, Any]] = {}
 # lobbies[lobby_id] = {
 #   "owner_user_id": str,
 #   "is_public": bool,
+#   "invite_code": str | None,
 #   "user_limit": int,
 #   "members": dict[str, dict[str, str]],
 #   "member_order": list[str],
 #   "member_connections": dict[str, int],
 #   "clients": set[WebSocket],
+#   "client_users": dict[WebSocket, str],
 #   "started": bool,
 #   "room_id": str | None,
+#   "last_activity": float,
 # }
 
 lobby_watchers: set[WebSocket] = set()
@@ -381,11 +393,18 @@ async def get_or_create_room(room_id: str, *, player_count: int) -> dict[str, An
         return rooms[room_id]
 
 
-def _lobby_snapshot(lobby_id: str, lobby: dict[str, Any]) -> dict[str, Any]:
+def _lobby_snapshot(
+    lobby_id: str,
+    lobby: dict[str, Any],
+    *,
+    include_invite_code: bool = True,
+    include_idle_expires: bool = True,
+) -> dict[str, Any]:
     members = [lobby["members"][uid] for uid in lobby["member_order"]]
     owner_member = lobby["members"].get(lobby["owner_user_id"])
     owner_username = owner_member["username"] if owner_member else None
-    return {
+    idle_expires_at = lobby.get("last_activity", _now_ts()) + LOBBY_TTL_SECONDS
+    payload = {
         "lobby_id": lobby_id,
         "owner_user_id": lobby["owner_user_id"],
         "owner_username": owner_username,
@@ -395,6 +414,11 @@ def _lobby_snapshot(lobby_id: str, lobby: dict[str, Any]) -> dict[str, Any]:
         "room_id": lobby["room_id"],
         "members": members,
     }
+    if include_invite_code:
+        payload["invite_code"] = lobby["invite_code"]
+    if include_idle_expires:
+        payload["idle_expires_at"] = idle_expires_at
+    return payload
 
 
 async def _broadcast_lobby(lobby: dict[str, Any], payload: dict[str, Any]) -> None:
@@ -410,7 +434,9 @@ async def _broadcast_lobby(lobby: dict[str, Any], payload: dict[str, Any]) -> No
 
 def _public_lobby_list() -> list[dict[str, Any]]:
     return [
-        _lobby_snapshot(lobby_id, lobby)
+        _lobby_snapshot(
+            lobby_id, lobby, include_invite_code=False, include_idle_expires=False
+        )
         for lobby_id, lobby in lobbies.items()
         if lobby["is_public"] and not lobby["started"]
     ]
@@ -434,6 +460,66 @@ async def _broadcast_lobby_list() -> None:
         async with lobbies_lock:
             for ws in dead:
                 lobby_watchers.discard(ws)
+
+
+def _now_ts() -> float:
+    return time.time()
+
+
+def _generate_invite_code() -> str:
+    return "".join(secrets.choice(INVITE_CODE_ALPHABET) for _ in range(INVITE_CODE_LENGTH))
+
+
+def _allocate_invite_code() -> str:
+    for _ in range(1000):
+        code = _generate_invite_code()
+        if all(lobby.get("invite_code") != code for lobby in lobbies.values()):
+            return code
+    raise RuntimeError("Failed to allocate unique invite code")
+
+
+async def _lobby_cleanup_loop() -> None:
+    while True:
+        await asyncio.sleep(LOBBY_CLEANUP_INTERVAL_SECONDS)
+        now = _now_ts()
+
+        expired: list[tuple[dict[str, Any], list[WebSocket], dict[WebSocket, str]]] = []
+
+        async with lobbies_lock:
+            for lobby_id, lobby in list(lobbies.items()):
+                if lobby["started"]:
+                    continue
+                last_activity = float(lobby.get("last_activity", now))
+                if now - last_activity < LOBBY_TTL_SECONDS:
+                    continue
+
+                clients = list(lobby["clients"])
+                client_users = dict(lobby.get("client_users", {}))
+                expired.append((lobby, clients, client_users))
+                del lobbies[lobby_id]
+
+        if not expired:
+            continue
+
+        for lobby, clients, client_users in expired:
+            owner_id = lobby["owner_user_id"]
+            for ws in clients:
+                user_id = client_users.get(ws)
+                payload = {
+                    "type": "lobby_closed",
+                    "message": "Lobby closed due to inactivity (10 minutes).",
+                }
+                if user_id == owner_id:
+                    payload["owner_message"] = (
+                        "Your lobby closed due to inactivity (10 minutes). "
+                        "Create a new lobby to continue."
+                    )
+                try:
+                    await ws.send_json(payload)
+                except Exception:
+                    pass
+
+        await _broadcast_lobby_list()
 
 
 def _clamp_user_limit(value: int | None) -> int:
@@ -484,8 +570,10 @@ async def _leave_lobby_connection(
             return
 
         lobby["clients"].discard(ws)
+        lobby["client_users"].pop(ws, None)
 
         connections: dict[str, int] = lobby["member_connections"]
+        member_removed = False
         if user_id in connections:
             connections[user_id] = max(0, connections[user_id] - 1)
             if connections[user_id] == 0:
@@ -495,6 +583,10 @@ async def _leave_lobby_connection(
                     lobby["member_order"] = [
                         uid for uid in lobby["member_order"] if uid != user_id
                     ]
+                member_removed = True
+
+        if member_removed:
+            lobby["last_activity"] = _now_ts()
 
         owner_left = (
             user_id == lobby["owner_user_id"] and user_id not in connections
@@ -562,6 +654,12 @@ async def ws_endpoint(ws: WebSocket):
         while True:
             msg = await ws.receive_json()
 
+            if joined_lobby is not None and lobby_id is not None:
+                async with lobbies_lock:
+                    if lobby_id not in lobbies:
+                        joined_lobby = None
+                        lobby_id = None
+
             if is_lobby_list(msg):
                 async with lobbies_lock:
                     lobby_watchers.add(ws)
@@ -599,9 +697,14 @@ async def ws_endpoint(ws: WebSocket):
                 lobby_snapshot: dict[str, Any]
 
                 async with lobbies_lock:
+                    invite_code = None
+                    if not is_public:
+                        invite_code = _allocate_invite_code()
+
                     lobby = {
                         "owner_user_id": user.id,
                         "is_public": is_public,
+                        "invite_code": invite_code,
                         "user_limit": user_limit,
                         "members": {
                             user.id: {
@@ -612,8 +715,10 @@ async def ws_endpoint(ws: WebSocket):
                         "member_order": [user.id],
                         "member_connections": {user.id: 1},
                         "clients": {ws},
+                        "client_users": {ws: user.id},
                         "started": False,
                         "room_id": None,
+                        "last_activity": _now_ts(),
                     }
                     lobbies[new_lobby_id] = lobby
                     lobby_snapshot = _lobby_snapshot(new_lobby_id, lobby)
@@ -635,13 +740,37 @@ async def ws_endpoint(ws: WebSocket):
                 await _broadcast_lobby_list()
                 continue
 
-            if is_lobby_join(msg):
-                target_lobby_id = str(msg["lobby_id"]).strip()
-                if not target_lobby_id:
-                    await ws.send_json(
-                        {"type": "error", "message": "Lobby id is required"}
-                    )
-                    continue
+            if is_lobby_join_invite(msg) or is_lobby_join(msg):
+                target_lobby_id: str | None = None
+                join_via_invite = False
+
+                if is_lobby_join_invite(msg):
+                    join_via_invite = True
+                    invite_code = str(msg["invite_code"]).strip().upper()
+                    if not invite_code:
+                        await ws.send_json(
+                            {"type": "error", "message": "Invite code is required"}
+                        )
+                        continue
+
+                    async with lobbies_lock:
+                        for candidate_id, candidate in lobbies.items():
+                            if candidate.get("invite_code") == invite_code:
+                                target_lobby_id = candidate_id
+                                break
+
+                    if not target_lobby_id:
+                        await ws.send_json(
+                            {"type": "error", "message": "Invite code not found"}
+                        )
+                        continue
+                else:
+                    target_lobby_id = str(msg["lobby_id"]).strip()
+                    if not target_lobby_id:
+                        await ws.send_json(
+                            {"type": "error", "message": "Lobby id is required"}
+                        )
+                        continue
 
                 if joined_lobby is not None and lobby_id != target_lobby_id:
                     await ws.send_json(
@@ -658,6 +787,7 @@ async def ws_endpoint(ws: WebSocket):
                 role = "member"
                 error_message: str | None = None
                 started_room_id: str | None = None
+                member_added = False
 
                 async with lobbies_lock:
                     lobby = lobbies.get(target_lobby_id)
@@ -671,7 +801,13 @@ async def ws_endpoint(ws: WebSocket):
                             if not started_room_id:
                                 error_message = "Lobby start in progress"
                     else:
-                        if user.id not in lobby["members"]:
+                        if (
+                            not lobby["is_public"]
+                            and not join_via_invite
+                            and user.id not in lobby["members"]
+                        ):
+                            error_message = "Private lobby. Use an invite code."
+                        elif user.id not in lobby["members"]:
                             if len(lobby["members"]) >= lobby["user_limit"]:
                                 error_message = "Lobby is full"
                             else:
@@ -680,12 +816,17 @@ async def ws_endpoint(ws: WebSocket):
                                     "username": user.username,
                                 }
                                 lobby["member_order"].append(user.id)
+                                member_added = True
 
                         if error_message is None:
                             lobby["member_connections"][user.id] = (
                                 lobby["member_connections"].get(user.id, 0) + 1
                             )
                             lobby["clients"].add(ws)
+                            lobby["client_users"][ws] = user.id
+
+                            if member_added:
+                                lobby["last_activity"] = _now_ts()
 
                             lobby_snapshot = _lobby_snapshot(target_lobby_id, lobby)
                             role = (
@@ -774,6 +915,7 @@ async def ws_endpoint(ws: WebSocket):
                             error_message = "Lobby start in progress"
                     else:
                         lobby["started"] = True
+                        lobby["last_activity"] = _now_ts()
                         member_order = list(lobby["member_order"])
                         target_room_id = _make_room_id()
                         lobby["room_id"] = target_room_id

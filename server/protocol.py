@@ -24,6 +24,11 @@ class ClientLobbyJoin(TypedDict):
     lobby_id: str
 
 
+class ClientLobbyJoinInvite(TypedDict):
+    type: str  # "lobby_join_invite"
+    invite_code: str
+
+
 class ClientLobbyLeave(TypedDict):
     type: str  # "lobby_leave"
     lobby_id: str
@@ -68,6 +73,10 @@ def is_lobby_create(msg: dict[str, Any]) -> bool:
 
 def is_lobby_join(msg: dict[str, Any]) -> bool:
     return msg.get("type") == "lobby_join" and "lobby_id" in msg
+
+
+def is_lobby_join_invite(msg: dict[str, Any]) -> bool:
+    return msg.get("type") == "lobby_join_invite" and "invite_code" in msg
 
 
 def is_lobby_leave(msg: dict[str, Any]) -> bool:

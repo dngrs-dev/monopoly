@@ -6,10 +6,15 @@ const myLobbySection = document.getElementById("my-lobby");
 const myLobbyIdEl = document.getElementById("my-lobby-id");
 const myLobbyOwnerEl = document.getElementById("my-lobby-owner");
 const myLobbyVisibilityEl = document.getElementById("my-lobby-visibility");
+const myLobbyInviteEl = document.getElementById("my-lobby-invite");
 const myLobbyLimitEl = document.getElementById("my-lobby-limit");
 const myLobbyMembersEl = document.getElementById("my-lobby-members");
+const ownerCountdownRow = document.getElementById("owner-countdown-row");
+const ownerCountdownEl = document.getElementById("owner-countdown");
 const startLobbyBtn = document.getElementById("start-lobby");
 const leaveLobbyBtn = document.getElementById("leave-lobby");
+const inviteCodeInput = document.getElementById("invite-code");
+const joinPrivateBtn = document.getElementById("join-private");
 const statusEl = document.getElementById("ws-status");
 const loginBtn = document.getElementById("login");
 const logoutBtn = document.getElementById("logout");
@@ -22,6 +27,8 @@ let lobbyList = [];
 let currentLobby = null;
 let authed = false;
 let currentUser = null;
+let countdownTimer = null;
+let countdownExpiresAt = null;
 
 function setError(text) {
   if (errEl) errEl.textContent = text || "";
@@ -42,11 +49,36 @@ function clampLobbyLimit(value) {
   return value;
 }
 
+function formatCountdown(secondsLeft) {
+  const safeSeconds = Math.max(0, Math.floor(secondsLeft));
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function updateOwnerCountdown() {
+  if (!ownerCountdownRow || !ownerCountdownEl) return;
+  const isOwner =
+    currentLobby && currentUser && currentLobby.owner_user_id === currentUser.user_id;
+
+  if (!isOwner || !Number.isFinite(countdownExpiresAt)) {
+    ownerCountdownRow.hidden = true;
+    ownerCountdownEl.textContent = "--:--";
+    return;
+  }
+
+  ownerCountdownRow.hidden = false;
+  const secondsLeft = (countdownExpiresAt - Date.now()) / 1000;
+  ownerCountdownEl.textContent = formatCountdown(secondsLeft);
+}
+
 function renderAuthState() {
   const canUseLobby = authed && isWsReady();
 
   if (createLobbyBtn)
     createLobbyBtn.disabled = !canUseLobby || !!currentLobby;
+  if (joinPrivateBtn)
+    joinPrivateBtn.disabled = !canUseLobby || !!currentLobby;
   if (logoutBtn) logoutBtn.disabled = !authed;
   if (changeUsernameBtn) changeUsernameBtn.disabled = !authed;
   if (currentUserEl)
@@ -127,8 +159,11 @@ function renderCurrentLobby() {
     if (myLobbyIdEl) myLobbyIdEl.textContent = "(none)";
     if (myLobbyOwnerEl) myLobbyOwnerEl.textContent = "(none)";
     if (myLobbyVisibilityEl) myLobbyVisibilityEl.textContent = "(none)";
+    if (myLobbyInviteEl) myLobbyInviteEl.textContent = "(none)";
     if (myLobbyLimitEl) myLobbyLimitEl.textContent = "(none)";
     if (myLobbyMembersEl) myLobbyMembersEl.textContent = "(none)";
+    countdownExpiresAt = null;
+    updateOwnerCountdown();
     return;
   }
 
@@ -153,17 +188,29 @@ function renderCurrentLobby() {
     myLobbyVisibilityEl.textContent = currentLobby.is_public
       ? "public"
       : "private";
+  if (myLobbyInviteEl) {
+    myLobbyInviteEl.textContent = currentLobby.is_public
+      ? "(public lobby)"
+      : currentLobby.invite_code || "(pending)";
+  }
   if (myLobbyLimitEl)
     myLobbyLimitEl.textContent =
       limit === null ? "?" : `${members.length}/${limit}`;
   if (myLobbyMembersEl)
     myLobbyMembersEl.textContent = memberNames || "(none)";
 
+  if (Number.isFinite(currentLobby.idle_expires_at)) {
+    countdownExpiresAt = currentLobby.idle_expires_at * 1000;
+  } else {
+    countdownExpiresAt = null;
+  }
+
   const isOwner =
     currentUser && currentLobby.owner_user_id === currentUser.user_id;
   if (startLobbyBtn)
     startLobbyBtn.disabled = !(isOwner && isWsReady() && !currentLobby.started);
   if (leaveLobbyBtn) leaveLobbyBtn.disabled = !isWsReady();
+  updateOwnerCountdown();
 }
 
 async function checkAuth() {
@@ -283,7 +330,7 @@ function handleMessage(data) {
 
   if (data.type === "lobby_closed") {
     currentLobby = null;
-    setError(data.message || "Lobby closed");
+    setError(data.owner_message || data.message || "Lobby closed");
     renderAuthState();
     renderCurrentLobby();
     renderLobbyList();
@@ -382,6 +429,23 @@ if (startLobbyBtn) {
   };
 }
 
+if (joinPrivateBtn) {
+  joinPrivateBtn.onclick = () => {
+    if (!isWsReady() || currentLobby) return;
+    const inviteCode = (inviteCodeInput?.value || "").trim();
+    if (!inviteCode) {
+      setError("Invite code is required");
+      return;
+    }
+    ws.send(
+      JSON.stringify({
+        type: "lobby_join_invite",
+        invite_code: inviteCode,
+      }),
+    );
+  };
+}
+
 if (leaveLobbyBtn) {
   leaveLobbyBtn.onclick = () => {
     if (isWsReady() && currentLobby?.lobby_id) {
@@ -397,6 +461,10 @@ if (leaveLobbyBtn) {
     renderCurrentLobby();
     renderLobbyList();
   };
+}
+
+if (!countdownTimer) {
+  countdownTimer = window.setInterval(updateOwnerCountdown, 1000);
 }
 
 checkAuth();

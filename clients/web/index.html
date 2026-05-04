@@ -30,10 +30,23 @@
       <div>Lobby ID: <span id="my-lobby-id">(none)</span></div>
       <div>Owner: <span id="my-lobby-owner">(none)</span></div>
       <div>Visibility: <span id="my-lobby-visibility">(none)</span></div>
+      <div>Invite code: <span id="my-lobby-invite">(none)</span></div>
       <div>Limit: <span id="my-lobby-limit">(none)</span></div>
       <div>Members: <span id="my-lobby-members">(none)</span></div>
+      <div id="owner-countdown-row" hidden>
+        Idle closes in: <span id="owner-countdown">--:--</span>
+      </div>
       <button id="start-lobby" disabled>Start game</button>
       <button id="leave-lobby">Leave lobby</button>
+    </section>
+
+    <section>
+      <h2>Join private lobby</h2>
+      <label>
+        Invite code
+        <input id="invite-code" type="text" placeholder="ABC123" />
+      </label>
+      <button id="join-private" disabled>Join private lobby</button>
     </section>
 
     <section>
