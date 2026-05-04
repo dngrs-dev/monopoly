@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Profile</title>
+	</head>
+	<body>
+		<h1>Profile</h1>
+
+		<p>Signed in as: <span id="current-user">(loading)</span></p>
+		<p id="status"></p>
+
+		<section>
+			<h2>Avatar</h2>
+			<img
+				id="avatar-preview"
+				alt="Avatar preview"
+				width="128"
+				height="128"
+			/>
+			<div>
+				<input id="avatar-input" type="file" accept="image/*" />
+				<button id="avatar-clear" disabled>Clear avatar</button>
+			</div>
+			<p>Avatar is stored on the server.</p>
+		</section>
+
+		<section>
+			<h2>Username</h2>
+			<div>
+				<strong id="current-username">(loading)</strong>
+				<button id="edit-username" disabled>Change</button>
+			</div>
+			<div id="username-editor" hidden>
+				<label>
+					New username
+					<input id="username-input" type="text" maxlength="32" />
+				</label>
+				<button id="save-username" disabled>Save</button>
+				<button id="cancel-username" disabled>Cancel</button>
+			</div>
+		</section>
+
+		<section>
+			<h2>Inventory</h2>
+			<p>(empty)</p>
+		</section>
+
+		<p><button id="back-lobby">Back to lobby</button></p>
+
+		<p id="err" role="alert"></p>
+
+		<script src="/static/profile/profile.js"></script>
+	</body>
+</html>

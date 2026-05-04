@@ -19,6 +19,7 @@ const statusEl = document.getElementById("ws-status");
 const loginBtn = document.getElementById("login");
 const logoutBtn = document.getElementById("logout");
 const changeUsernameBtn = document.getElementById("change-username");
+const profileBtn = document.getElementById("profile");
 const currentUserEl = document.getElementById("current-user");
 const errEl = document.getElementById("err");
 
@@ -81,6 +82,7 @@ function renderAuthState() {
     joinPrivateBtn.disabled = !canUseLobby || !!currentLobby;
   if (logoutBtn) logoutBtn.disabled = !authed;
   if (changeUsernameBtn) changeUsernameBtn.disabled = !authed;
+  if (profileBtn) profileBtn.disabled = !authed;
   if (currentUserEl)
     currentUserEl.textContent = currentUser?.username || "(not signed in)";
 }
@@ -340,6 +342,12 @@ function handleMessage(data) {
 loginBtn.onclick = () => {
   window.location.href = "/login";
 };
+
+if (profileBtn) {
+  profileBtn.onclick = () => {
+    window.location.href = "/profile";
+  };
+}
 
 logoutBtn.onclick = async () => {
   try {

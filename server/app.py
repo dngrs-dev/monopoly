@@ -16,6 +16,8 @@ from fastapi import (
     Request,
     Response,
     status,
+    UploadFile,
+    File,
 )
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -149,6 +151,10 @@ def _validate_username(value: str) -> str:
     return username
 
 
+def _avatar_path(user_id: str) -> Path:
+    return AVATAR_DIR / f"{user_id}.png"
+
+
 class RegisterIn(BaseModel):
     email: str
     password: str
@@ -165,6 +171,9 @@ class UpdateUsernameIn(BaseModel):
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _WEB_DIR = _REPO_ROOT / "clients" / "web"
+AVATAR_DIR = _REPO_ROOT / ".data" / "avatars"
+DEFAULT_AVATAR_PATH = _WEB_DIR / "profile" / "avatar-default.svg"
+AVATAR_MAX_BYTES = 1024 * 1024
 
 DB_PATH = os.getenv("MONOPOLY_DB_PATH", str(_REPO_ROOT / ".data" / "monopoly.db"))
 auth_db = AuthDb(DB_PATH)
@@ -173,6 +182,7 @@ auth_db = AuthDb(DB_PATH)
 @app.on_event("startup")
 def _startup() -> None:
     auth_db.init()
+    AVATAR_DIR.mkdir(parents=True, exist_ok=True)
     asyncio.create_task(_lobby_cleanup_loop())
 
 
@@ -234,6 +244,11 @@ async def login_page() -> FileResponse:
 @app.get("/game")
 async def game_page() -> FileResponse:
     return FileResponse(_WEB_DIR / "game" / "index.html")
+
+
+@app.get("/profile")
+async def profile_page() -> FileResponse:
+    return FileResponse(_WEB_DIR / "profile" / "index.html")
 
 
 @app.post("/api/auth/register", status_code=status.HTTP_201_CREATED)
@@ -327,6 +342,52 @@ async def update_username(data: UpdateUsernameIn, request: Request):
 @app.post("/api/auth/logout")
 async def logout(response: Response):
     response.delete_cookie(COOKIE_NAME, path="/")
+    return {"ok": True}
+
+
+@app.get("/api/profile/avatar")
+async def get_avatar(request: Request):
+    user = await _require_user_http(request)
+    path = _avatar_path(user.id)
+    headers = {"Cache-Control": "no-store"}
+    if path.exists():
+        return FileResponse(path, media_type="image/png", headers=headers)
+    return FileResponse(
+        DEFAULT_AVATAR_PATH, media_type="image/svg+xml", headers=headers
+    )
+
+
+@app.post("/api/profile/avatar")
+async def upload_avatar(request: Request, file: UploadFile = File(...)):
+    user = await _require_user_http(request)
+    if file.content_type != "image/png":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Avatar must be a PNG image",
+        )
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Empty upload"
+        )
+    if len(data) > AVATAR_MAX_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Avatar must be 1MB or smaller",
+        )
+
+    path = _avatar_path(user.id)
+    path.write_bytes(data)
+    return {"ok": True}
+
+
+@app.delete("/api/profile/avatar")
+async def delete_avatar(request: Request):
+    user = await _require_user_http(request)
+    path = _avatar_path(user.id)
+    if path.exists():
+        path.unlink()
     return {"ok": True}
 
 
