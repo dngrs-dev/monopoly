@@ -628,7 +628,7 @@ def _(
         )
     )
 
-    tile.rent = _calculate_rent(tile, game)  # Update rent after improvement
+    tile.rent = _calculate_rent(tile, game, position=choice.property_position)  # Update rent after improvement
 
     return game, events, build_available_choices(game)
 
@@ -667,7 +667,7 @@ def _(
         )
     )
 
-    tile.rent = _calculate_rent(tile, game)  # Update rent after selling improvement
+    tile.rent = _calculate_rent(tile, game, position=choice.property_position)  # Update rent after selling improvement
 
     return game, events, build_available_choices(game)
 

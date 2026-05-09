@@ -53,6 +53,8 @@ from server.protocol import (
     is_lobby_list,
 )
 from server.auth_db import AuthDb, User, normalize_email
+from server import inventory_db as inventory_db_module
+from boards.classic import build_classic_board
 
 
 load_dotenv()
@@ -193,11 +195,13 @@ AVATAR_MAX_BYTES = 1024 * 1024
 
 DB_PATH = os.getenv("MONOPOLY_DB_PATH", str(_REPO_ROOT / ".data" / "monopoly.db"))
 auth_db = AuthDb(DB_PATH)
+INV_EQUIP_DB_PATH = os.getenv("MONOPOLY_INVENTORY_DB_PATH", str(_REPO_ROOT / ".data" / "inventory.db"))
 
 
 @app.on_event("startup")
 def _startup() -> None:
     auth_db.init()
+    inventory_db_module.init(INV_EQUIP_DB_PATH)
     AVATAR_DIR.mkdir(parents=True, exist_ok=True)
     asyncio.create_task(_lobby_cleanup_loop())
 
@@ -343,6 +347,141 @@ async def login(data: LoginIn, response: Response):
             "email": user.email,
         },
     }
+
+
+class EquipIn(BaseModel):
+    card_instance_id: str
+    board_id: str
+    multiplier: float
+    target_positions: list[int] | None = None
+    target_group_id: int | None = None
+
+
+class UnequipIn(BaseModel):
+    card_instance_id: str | None = None
+    equip_id: str | None = None
+
+
+@app.post("/api/inventory/equip")
+async def api_equip(data: EquipIn, request: Request):
+    user = await _require_user_http(request)
+    # basic validation
+    if data.target_positions and data.target_group_id is not None:
+        # positions take priority; allow but warn? We'll accept positions and ignore group
+        pass
+
+    try:
+        equip_id = await run_in_threadpool(
+            inventory_db_module.inventory_db.equip_card,
+            user_id=user.id,
+            card_instance_id=data.card_instance_id,
+            board_id=data.board_id,
+            multiplier=float(data.multiplier),
+            target_positions=data.target_positions,
+            target_group_id=data.target_group_id,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    # Update any active rooms where this user is a player and broadcast snapshot
+    for room_id, room in list(rooms.items()):
+        user_to_player = room.get("user_to_player", {})
+        if user.id in user_to_player:
+            player_id = user_to_player[user.id]
+            session: GameSession = room["session"]
+            # determine board_id from created lobby if available
+            lobby_id = room.get("created_from_lobby_id")
+            board_id = "classic"
+            if lobby_id:
+                lobby = lobbies.get(lobby_id)
+                if lobby:
+                    board_id = lobby.get("board_id", "classic")
+
+            # rebuild rent modifiers for this player
+            if inventory_db_module.inventory_db is not None:
+                equipped = inventory_db_module.inventory_db.get_equipped_for_user_board(user.id, board_id)
+                pos_map: dict[int, float] = {}
+                for card in equipped:
+                    if card.target_positions:
+                        for pos in card.target_positions:
+                            pos_map[pos] = float(card.multiplier)
+                    elif card.target_group_id is not None:
+                        tiles = session.game.board.get_group_tiles(card.target_group_id)
+                        for t in tiles:
+                            p = session.game.board.get_tile_position(t)
+                            pos_map[p] = float(card.multiplier)
+                if pos_map:
+                    session.game.rent_modifiers[player_id] = pos_map
+
+            # broadcast update
+            try:
+                await broadcast(room, {"type": "update", "room_id": room_id, "snapshot": session.snapshot(), "choices": session.issued_choices})
+            except Exception:
+                pass
+
+    return {"ok": True, "equip_id": equip_id}
+
+
+@app.post("/api/inventory/unequip")
+async def api_unequip(data: UnequipIn, request: Request):
+    user = await _require_user_http(request)
+    try:
+        count = await run_in_threadpool(
+            inventory_db_module.inventory_db.unequip_card,
+            user_id=user.id,
+            card_instance_id=data.card_instance_id,
+            equip_id=data.equip_id,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    return {"ok": True, "removed": count}
+
+
+@app.get("/api/cards")
+async def api_list_cards(language_code: str = "en"):
+    if not inventory_db_module.inventory_db:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Card DB not initialized")
+    try:
+        cards = await run_in_threadpool(
+            inventory_db_module.inventory_db.list_cards,
+            language_code=language_code,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    return {"ok": True, "cards": cards}
+
+
+@app.get("/api/cards/{card_id}")
+async def api_get_card(card_id: str, language_code: str = "en"):
+    if not inventory_db_module.inventory_db:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Card DB not initialized")
+    try:
+        card = await run_in_threadpool(
+            inventory_db_module.inventory_db.get_card,
+            card_id=card_id,
+            language_code=language_code,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    if not card:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Card not found")
+    return {"ok": True, "card": card}
+
+
+@app.get("/api/inventory")
+async def api_get_inventory(language_code: str = "en", request: Request = None):
+    user = await _require_user_http(request)
+    if not inventory_db_module.inventory_db:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Card DB not initialized")
+    try:
+        cards = await run_in_threadpool(
+            inventory_db_module.inventory_db.list_user_cards,
+            user_id=user.id,
+            language_code=language_code,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    return {"ok": True, "cards": cards}
 
 
 @app.get("/api/auth/me")
@@ -515,7 +654,7 @@ async def get_or_create_room(room_id: str, *, player_count: int) -> dict[str, An
         if room_id in rooms:
             return rooms[room_id]
 
-        board = build_demo_board()
+        board = build_classic_board()
         game = Game(
             board=board,
             players=_build_player_list(player_count),
@@ -701,6 +840,34 @@ async def _create_room_for_lobby(
             user_to_player[user_id] = player_id
             player_to_user[player_id] = user_id
 
+        # Load equipped cards for each user for this lobby's board and build rent_modifiers
+        lobby = lobbies.get(lobby_id)
+        board_id = "classic"
+        if lobby is not None:
+            board_id = lobby.get("board_id", "classic")
+
+        session: GameSession = room["session"]
+        game = session.game
+        # ensure rent_modifiers map exists
+        game.rent_modifiers = {}
+
+        for user_id, player_id in user_to_player.items():
+            if inventory_db_module.inventory_db is None:
+                continue
+            equipped = inventory_db_module.inventory_db.get_equipped_for_user_board(user_id, board_id)
+            pos_map: dict[int, float] = {}
+            for card in equipped:
+                if card.target_positions:
+                    for pos in card.target_positions:
+                        pos_map[pos] = float(card.multiplier)
+                elif card.target_group_id is not None:
+                    tiles = game.board.get_group_tiles(card.target_group_id)
+                    for t in tiles:
+                        p = game.board.get_tile_position(t)
+                        pos_map[p] = float(card.multiplier)
+            if pos_map:
+                game.rent_modifiers[player_id] = pos_map
+
 
 async def _leave_lobby_connection(
     *, ws: WebSocket, lobby_id: str, user_id: str
@@ -851,6 +1018,7 @@ async def ws_endpoint(ws: WebSocket):
                         "is_public": is_public,
                         "invite_code": invite_code,
                         "user_limit": user_limit,
+                        "board_id": "classic",
                         "members": {
                             user.id: {
                                 "user_id": user.id,
@@ -959,8 +1127,8 @@ async def ws_endpoint(ws: WebSocket):
                                 lobby["members"][user.id] = {
                                     "user_id": user.id,
                                     "username": user.username,
+                                    "handle": user.handle,
                                 }
-                                lobby["member_order"].append(user.id)
                                 member_added = True
 
                         if error_message is None:
@@ -1095,6 +1263,135 @@ async def ws_endpoint(ws: WebSocket):
                         except Exception:
                             pass
                 await _broadcast_lobby_list()
+                continue
+
+            # WebSocket equip/unequip handlers
+            if "type" in msg and msg.get("type") == "equip_card":
+                # validate minimal fields
+                if not isinstance(msg.get("card_instance_id"), str) or not isinstance(msg.get("board_id"), str):
+                    await ws.send_json({"type": "error", "message": "Invalid equip payload"})
+                    continue
+                multiplier = msg.get("multiplier")
+                try:
+                    multiplier = float(multiplier)
+                except Exception:
+                    await ws.send_json({"type": "error", "message": "Invalid multiplier"})
+                    continue
+
+                target_positions = msg.get("target_positions")
+                if target_positions is not None and not (isinstance(target_positions, list) and all(isinstance(x, int) for x in target_positions)):
+                    await ws.send_json({"type": "error", "message": "Invalid target_positions"})
+                    continue
+
+                try:
+                    equip_id = None
+                    if inventory_db_module.inventory_db is not None:
+                        equip_id = await run_in_threadpool(
+                            inventory_db_module.inventory_db.equip_card,
+                            user_id=user.id,
+                            card_instance_id=msg["card_instance_id"],
+                            board_id=msg["board_id"],
+                            multiplier=multiplier,
+                            target_positions=target_positions,
+                            target_group_id=msg.get("target_group_id"),
+                        )
+                except Exception as e:
+                    await ws.send_json({"type": "equip_error", "message": str(e)})
+                    continue
+
+                # Update session rent_modifiers for this room if the user is a player
+                try:
+                    if joined_room is not None:
+                        user_to_player = joined_room.get("user_to_player", {})
+                        if user.id in user_to_player:
+                            player_id = user_to_player[user.id]
+                            session: GameSession = joined_room["session"]
+                            # derive board_id from lobby if present
+                            created_from = joined_room.get("created_from_lobby_id")
+                            board_id = "classic"
+                            if created_from:
+                                l = lobbies.get(created_from)
+                                if l:
+                                    board_id = l.get("board_id", "classic")
+                            if inventory_db_module.inventory_db is not None:
+                                equipped = inventory_db_module.inventory_db.get_equipped_for_user_board(user.id, board_id)
+                                pos_map: dict[int, float] = {}
+                                for card in equipped:
+                                    if card.target_positions:
+                                        for pos in card.target_positions:
+                                            pos_map[pos] = float(card.multiplier)
+                                    elif card.target_group_id is not None:
+                                        tiles = session.game.board.get_group_tiles(card.target_group_id)
+                                        for t in tiles:
+                                            p = session.game.board.get_tile_position(t)
+                                            pos_map[p] = float(card.multiplier)
+                                if pos_map:
+                                    session.game.rent_modifiers[player_id] = pos_map
+                except Exception:
+                    pass
+
+                await ws.send_json({"type": "equip_ok", "equip_id": equip_id})
+
+                # broadcast updated snapshot to room clients
+                try:
+                    if joined_room is not None:
+                        session: GameSession = joined_room["session"]
+                        await broadcast(joined_room, {"type": "update", "room_id": joined_room.get("room_id"), "snapshot": session.snapshot(), "choices": session.issued_choices})
+                except Exception:
+                    pass
+
+                continue
+
+            if "type" in msg and msg.get("type") == "unequip_card":
+                try:
+                    if inventory_db_module.inventory_db is None:
+                        raise ValueError("Inventory DB not initialized")
+                    count = await run_in_threadpool(inventory_db_module.inventory_db.unequip_card, user_id=user.id, card_instance_id=msg.get("card_instance_id"), equip_id=msg.get("equip_id"))
+                except Exception as e:
+                    await ws.send_json({"type": "unequip_error", "message": str(e)})
+                    continue
+
+                # update session rent_modifiers
+                try:
+                    if joined_room is not None:
+                        user_to_player = joined_room.get("user_to_player", {})
+                        if user.id in user_to_player:
+                            player_id = user_to_player[user.id]
+                            session: GameSession = joined_room["session"]
+                            created_from = joined_room.get("created_from_lobby_id")
+                            board_id = "classic"
+                            if created_from:
+                                l = lobbies.get(created_from)
+                                if l:
+                                    board_id = l.get("board_id", "classic")
+                            if inventory_db_module.inventory_db is not None:
+                                equipped = inventory_db_module.inventory_db.get_equipped_for_user_board(user.id, board_id)
+                                pos_map: dict[int, float] = {}
+                                for card in equipped:
+                                    if card.target_positions:
+                                        for pos in card.target_positions:
+                                            pos_map[pos] = float(card.multiplier)
+                                    elif card.target_group_id is not None:
+                                        tiles = session.game.board.get_group_tiles(card.target_group_id)
+                                        for t in tiles:
+                                            p = session.game.board.get_tile_position(t)
+                                            pos_map[p] = float(card.multiplier)
+                                if pos_map:
+                                    session.game.rent_modifiers[player_id] = pos_map
+                                else:
+                                    session.game.rent_modifiers.pop(player_id, None)
+                except Exception:
+                    pass
+
+                await ws.send_json({"type": "unequip_ok", "removed": count})
+
+                try:
+                    if joined_room is not None:
+                        session: GameSession = joined_room["session"]
+                        await broadcast(joined_room, {"type": "update", "room_id": joined_room.get("room_id"), "snapshot": session.snapshot(), "choices": session.issued_choices})
+                except Exception:
+                    pass
+
                 continue
 
             if is_join(msg):

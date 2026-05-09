@@ -66,3 +66,17 @@ export async function deleteAvatar() {
     return false;
   }
 }
+
+export async function fetchInventory(language_code = "en") {
+  try {
+    const res = await fetch(`/api/inventory?language_code=${encodeURIComponent(language_code)}`, {
+      credentials: "same-origin",
+    });
+    if (res.status === 401) return null;
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.cards || [];
+  } catch {
+    return null;
+  }
+}

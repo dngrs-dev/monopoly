@@ -43,6 +43,21 @@ class ClientLobbyList(TypedDict):
     type: str  # "lobby_list"
 
 
+class ClientEquip(TypedDict):
+    type: str  # "equip_card"
+    card_instance_id: str
+    board_id: str
+    multiplier: float
+    target_positions: NotRequired[list[int]]
+    target_group_id: NotRequired[int]
+
+
+class ClientUnequip(TypedDict):
+    type: str  # "unequip_card"
+    card_instance_id: NotRequired[str]
+    equip_id: NotRequired[str]
+
+
 def is_join(msg: dict[str, Any]) -> bool:
     return msg.get("type") == "join" and "room_id" in msg
 
@@ -89,3 +104,23 @@ def is_lobby_start(msg: dict[str, Any]) -> bool:
 
 def is_lobby_list(msg: dict[str, Any]) -> bool:
     return msg.get("type") == "lobby_list"
+
+
+def is_equip(msg: dict[str, Any]) -> bool:
+    if msg.get("type") != "equip_card":
+        return False
+    if "card_instance_id" not in msg or "board_id" not in msg or "multiplier" not in msg:
+        return False
+    if ("target_positions" in msg) and not (
+        isinstance(msg["target_positions"], list) and all(isinstance(x, int) for x in msg["target_positions"])
+    ):
+        return False
+    return True
+
+
+def is_unequip(msg: dict[str, Any]) -> bool:
+    if msg.get("type") != "unequip_card":
+        return False
+    if ("card_instance_id" not in msg) and ("equip_id" not in msg):
+        return False
+    return True

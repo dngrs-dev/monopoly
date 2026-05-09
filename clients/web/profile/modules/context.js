@@ -9,6 +9,7 @@ export const elements = {
   usernameHistoryEl: $("username-history"),
   statsPlayedEl: $("stats-played"),
   statsWinsEl: $("stats-wins"),
+  inventoryContainer: $("inventory-container"),
   statusEl: $("status"),
   errEl: $("err"),
   avatarPreview: $("avatar-preview"),

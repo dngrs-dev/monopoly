@@ -46,6 +46,7 @@ class Game:
     auction: Auction | None = None
     trade_offer: TradeOffer | None = None
     pending_payment: PendingPayment | None = None
+    rent_modifiers: dict[int, dict[int, float]] = field(default_factory=dict)
 
     def current_player(self) -> Player:
         return self.players[self.current_player_index]
