@@ -67,8 +67,7 @@ def _(
     if tile.mortgaged:
         game.turn_phase = TurnPhase.END_TURN
         return game, events, choices
-    tile_pos = game.board.get_tile_position(tile)
-    tile.rent = _calculate_rent(tile, game, position=tile_pos)  # Update tile with fresh rent
+    tile.rent = _calculate_rent(tile, game)  # Update tile with fresh rent
 
     if player.balance < tile.rent:
         game.pending_payment = PendingPayment(
@@ -98,7 +97,13 @@ def _(
     return game, events, choices
 
 
-def _calculate_rent(tile: OwnableTile, game: Game, position: int | None = None) -> int:
+def _multiply_by_card(rent: int, player: Player) -> int:
+    return rent
+
+def _calculate_rent(tile: OwnableTile, game: Game) -> int:
+    owner_id = tile.owner
+    if owner_id is None or tile.mortgaged:
+        return 0
     if isinstance(tile, StreetTile):
         rent = tile.rent_schedule[tile.improvement_level]
         if game.rules.double_rent_on_monopoly:
@@ -107,58 +112,19 @@ def _calculate_rent(tile: OwnableTile, game: Game, position: int | None = None) 
                 t.owner == tile.owner for t in group_tiles
             ):
                 rent *= 2
-        # apply equipped-card multiplier if present
-        owner = tile.owner
-        if owner is not None:
-            if position is None:
-                position = game.board.get_tile_position(tile)
-            mods = game.rent_modifiers.get(owner, {})
-            mul = mods.get(position)
-            if mul is not None:
-                rent = int(rent * mul)
-        return rent
     elif isinstance(tile, RailroadTile):
         group_tiles = game.board.get_group_tiles(tile.group_id)
         owned_count = sum(1 for t in group_tiles if t.owner == tile.owner)
         rent = tile.rent_schedule[owned_count - 1] if owned_count > 0 else 0
-        owner = tile.owner
-        if owner is not None:
-            if position is None:
-                position = game.board.get_tile_position(tile)
-            mods = game.rent_modifiers.get(owner, {})
-            mul = mods.get(position)
-            if mul is not None:
-                rent = int(rent * mul)
-        return rent
     elif isinstance(tile, UtilityTile):
         utilities = [t for t in game.board.get_group_tiles(tile.group_id) if isinstance(t, UtilityTile)]
         owned_count = sum(1 for t in utilities if t.owner == tile.owner)
         multiplier = tile.rent_multiplier[min(owned_count - 1, len(tile.rent_multiplier) - 1)] if owned_count > 0 else 0
         rent = multiplier * game.dice.last_roll
-        owner = tile.owner
-        if owner is not None:
-            if position is None:
-                position = game.board.get_tile_position(tile)
-            mods = game.rent_modifiers.get(owner, {})
-            mul = mods.get(position)
-            if mul is not None:
-                rent = int(rent * mul)
-        return rent
     else:
         rent = tile.rent
-        owner = tile.owner
-        if owner is not None:
-            if position is None:
-                try:
-                    position = game.board.get_tile_position(tile)
-                except Exception:
-                    position = None
-            if position is not None:
-                mods = game.rent_modifiers.get(owner, {})
-                mul = mods.get(position)
-                if mul is not None:
-                    rent = int(rent * mul)
-        return rent
+    owner = next((p for p in game.players if p.id == owner_id), None)
+    return _multiply_by_card(rent, owner) if owner else rent
 
 
 @resolve_tile.register
