@@ -97,8 +97,9 @@ def _(
     return game, events, choices
 
 
-def _multiply_by_card(rent: int, player: Player) -> int:
-    return rent
+def _multiply_by_card(rent: int, tile_position: int, player: Player) -> int:
+    multiplier = player.multiplier_cards.get(tile_position, 1.0)
+    return int(rent * multiplier)
 
 def _calculate_rent(tile: OwnableTile, game: Game) -> int:
     owner_id = tile.owner

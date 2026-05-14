@@ -18,6 +18,7 @@ class Player:
     bankrupt: bool = False
     in_jail: bool = False
     cards: list[Card] = field(default_factory=list)
+    multiplier_cards: dict[int, float] = field(default_factory=dict)  # tile_position -> multiplier
 
     def move_steps(self, steps: int, board: Board) -> list[Event]:
         events: list[Event] = []
