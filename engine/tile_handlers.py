@@ -103,6 +103,7 @@ def _multiply_by_card(rent: int, tile_position: int, player: Player) -> int:
 
 def _calculate_rent(tile: OwnableTile, game: Game) -> int:
     owner_id = tile.owner
+    tile_position = game.board.get_tile_position(tile)
     if owner_id is None or tile.mortgaged:
         return 0
     if isinstance(tile, StreetTile):
@@ -125,7 +126,7 @@ def _calculate_rent(tile: OwnableTile, game: Game) -> int:
     else:
         rent = tile.rent
     owner = next((p for p in game.players if p.id == owner_id), None)
-    return _multiply_by_card(rent, owner) if owner else rent
+    return _multiply_by_card(rent, tile_position, owner) if owner else rent
 
 
 @resolve_tile.register
