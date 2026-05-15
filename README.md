@@ -9,9 +9,9 @@ This repo is intentionally a **prototype / learning project**: the core is an ev
 ## Structure
 
 - `engine/` — core game engine (state + rules)
-- `server/` — FastAPI app + in-memory “rooms” (WebSocket)
-- `clients/web/` — tiny HTML/JS client (served by the server)
-- `demo/` — terminal demo + board builders
+- `server/` — FastAPI app
+- `clients/web/` — tiny HTML/JS client
+- `demo/` — terminal demo
 - `tests/` — unit tests
 
 ## What’s implemented
@@ -26,16 +26,9 @@ Engine:
 - Jail actions (pay fine, try doubles, use "get out of jail free" card)
 - Trade offers (make/send/accept/reject) (see `engine/tradeoffer.py`)
 
-Web demo:
-
-- WebSocket “rooms”: multiple browser tabs can join the same room and see the same shared game state
-- Minimal UI that renders the server snapshot/events JSON and lets you click choices
-
 ## What’s incomplete
 
-- Not a full Monopoly ruleset (mortgaging, bankruptcy rules, etc.).
-- Authentication is basic (email/password + cookie) and there’s no email verification/password reset.
-- State is in-memory only: restarting the server resets rooms.
+WEB
 
 ## Requirements
 
@@ -53,16 +46,15 @@ Start the FastAPI server:
 ```bash
 python -m uvicorn server.app:app --host 127.0.0.1 --port 8000
 ```
-
-Notes:
-
-- The server currently uses a small demo board (8 tiles) defined in `server/app.py`.
-- State is in-memory only; restarting the server resets rooms.
+or
+```bash
+fastapi dev server/app.py
+```
 
 ## Run the terminal demo (no server)
 
 ```bash
-python demo/demo.py
+python -m demo.run
 ```
 
 ## Run tests / lint

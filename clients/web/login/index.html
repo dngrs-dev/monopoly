@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Monopoly</title>
+    <link rel="stylesheet" href="/static/login/styles.css">
+</head>
+<body>
+    <div class="login-container">
+        <h1>Login to Monopoly</h1>
+        <form action="/auth/login" method="post">
+            <input type="text" name="email" placeholder="example@test.com" required>
+            <input type="password" name="password" placeholder="12345678" required>
+            <button type="submit">Login</button>
+        </form>
+    </div>
+</html>
