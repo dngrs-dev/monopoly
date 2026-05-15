@@ -1,42 +1,57 @@
-html, body {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    height: 100%;
-    min-width: none;
-}
-header {
-    background-color: #333;
-}
-nav {
-    display: flex;
-    justify-content: center;
-    padding: 15px 0;
-}
-nav button {
-    background-color: #555;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    margin: 0 5px;
-    cursor: pointer;
+:root {
+    --max-content-width: 1000px;
+    --color-page-bg: #ccc;
+    --color-surface-dark: #333;
+    --color-button-bg: #555;
+    --color-button-bg-hover: #777;
+    --color-text-light: #fff;
 }
 body {
-    position: relative;
+    background-color: var(--color-page-bg);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
     font-family: Arial, sans-serif;
     margin: 0;
     padding: 0;
 }
-footer {
-    background-color: #333;
-    color: white;
-    text-align: center;
-    position: flex;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    padding: 10px 0;
+.widther {
+    width: min(100%, var(--max-content-width));
+    margin: 0 auto;
+    padding: 0 16px;
+    box-sizing: border-box;
 }
-p {
-    margin: 50px 0;
+.nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 0;
+}
+.nav-group {
+    display: flex;
+    gap: 10px;
+}
+.nav button {
+    background-color: var(--color-button-bg);
+    color: var(--color-text-light);
+    border: none;
+    padding: 10px 20px;
+    margin: 0;
+    cursor: pointer;
+}
+.nav button:hover {
+    background-color: var(--color-button-bg-hover);
+}
+.header {
+    background-color: var(--color-surface-dark);
+    color: var(--color-text-light);
+    padding: 0;
+    text-align: center;
+}
+.footer {
+    text-align: center;
+    padding: 20px 0;
+    background-color: var(--color-surface-dark);
+    color: var(--color-text-light);
+    margin-top: auto;
 }
