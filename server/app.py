@@ -1,4 +1,3 @@
-import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
@@ -6,7 +5,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .dependecies import init_db
-from .routers import main, auth, login, signup, profile
+from .routers import main, auth, login, signup, profile, ws
 from .paths import WEB_ROOT
 
 load_dotenv()
@@ -18,6 +17,7 @@ app.include_router(auth.router)
 app.include_router(login.router)
 app.include_router(signup.router)
 app.include_router(profile.router)
+app.include_router(ws.router)
 
 @app.on_event("startup")
 async def _startup():
