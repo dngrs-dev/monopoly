@@ -1,11 +1,11 @@
 import os
 from datetime import datetime, timedelta, timezone
 
-from fastapi import Response
+from fastapi import Response, Cookie, Depends, HTTPException
 from jose import jwt, JWTError
 from sqlalchemy.orm import Session
 
-from .dependecies import User
+from .dependecies import User, get_db
 
 JWT_SECRET = os.getenv("JWT_SECRET", "supersecretkey")
 JWT_ALG = "HS256"
@@ -53,3 +53,12 @@ def get_user_from_cookie(access_token: str | None, db: Session) -> User | None:
     if user_id is None:
         return None
     return db.get(User, user_id)
+
+def get_current_user_optional(access_token: str | None = Cookie(default=None, alias=JWT_COOKIE_NAME), db: Session = Depends(get_db)) -> User | None:
+    return get_user_from_cookie(access_token, db)
+
+def get_current_user(access_token: str | None = Cookie(default=None, alias=JWT_COOKIE_NAME), db: Session = Depends(get_db)) -> User:
+    user = get_user_from_cookie(access_token, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return user

@@ -1,14 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, Cookie
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..jwt_utils import (
-    JWT_COOKIE_NAME,
     create_access_token,
     set_auth_cookie,
     clear_auth_cookie,
-    get_user_from_cookie,
+    get_current_user
 )
 
 from ..dependecies import (
@@ -83,12 +82,9 @@ def logout(response: Response):
     return {"ok": True}
 
 @router.get("/me", response_model=UserOut)
-def me(access_token: str | None = Cookie(default=None), db: Session = Depends(get_db)):
-    user = get_user_from_cookie(access_token, db)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return user
+def me(current_user: User = Depends(get_current_user)):
+    return current_user
 
 @router.get("/session", response_model=UserOut)
-def session(access_token: str | None = Cookie(default=None), db: Session = Depends(get_db)):
-    return me(access_token, db)
+def session(current_user: User = Depends(get_current_user)):
+    return current_user
