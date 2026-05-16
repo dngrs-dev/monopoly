@@ -3,8 +3,9 @@ import re
 from datetime import datetime, timezone
 from typing import Generator
 
+import secrets
 from passlib.context import CryptContext
-from sqlalchemy import DateTime, Integer, String, create_engine, select
+from sqlalchemy import DateTime, BigInteger, String, create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from .paths import DB_PATH
@@ -21,7 +22,7 @@ class Base(DeclarativeBase):
 class User(Base):
     __tablename__ = "users"
     
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     email: Mapped[str] = mapped_column(String, unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String)
     display_name: Mapped[str] = mapped_column(String)
@@ -43,6 +44,13 @@ def get_db() -> Generator[Session, None, None]:
     finally:
         db.close()
         
+def generate_unique_user_id(db: Session) -> int:
+    while True:
+        candidate = secrets.randbelow(9_000_000_000_000_000) + 1_000_000_000_000_000
+        exists = db.execute(select(User.id).where(User.id == candidate)).first()
+        if not exists:
+            return candidate
+        
 def hash_password(password: str) -> str:
     return _pwd_context.hash(password)
 
@@ -57,3 +65,6 @@ def make_profile_link(seed: str, db: Session) -> str:
         candidate = f"{base}-{suffix}"
         suffix += 1
     return candidate
+
+if __name__ == "__main__":
+    generate_unique_user_id(SessionLocal())

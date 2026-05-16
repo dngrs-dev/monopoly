@@ -17,6 +17,7 @@ from ..dependecies import (
     hash_password,
     make_profile_link,
     verify_password,
+    generate_unique_user_id,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -51,6 +52,7 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
     profile_link = make_profile_link(display_name, db)
     
     user = User(
+        id=generate_unique_user_id(db),
         email=email,
         password_hash=hash_password(payload.password),
         display_name=display_name,

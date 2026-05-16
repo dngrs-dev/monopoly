@@ -16,12 +16,20 @@ def my_profile(current_user: User | None = Depends(get_current_user_optional)):
         return RedirectResponse("/", status_code=303)
     return RedirectResponse(f"/profile/{current_user.profile_link}", status_code=303)
 
+@router.get("/{user_id:int}")
+def profile_by_id(user_id: int, db: Session = Depends(get_db)):
+    user = db.get(User, user_id)
+    if not user:
+        return RedirectResponse("/", status_code=303)
+    return RedirectResponse(f"/profile/{user.profile_link}", status_code=303)
+
 @router.get("/{profile_link}")
 def profile_page(profile_link: str):
     return FileResponse(WEB_ROOT / "profile" / "index.html")
 
 
 class PublicProfile(BaseModel):
+    id: int
     display_name: str
     profile_link: str
     avatar_url: str
@@ -32,6 +40,7 @@ def get_public_profile(profile_link: str, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="Profile not found")
     return PublicProfile(
+        id=user.id,
         display_name=user.display_name,
         profile_link=user.profile_link,
         avatar_url=user.avatar_url
