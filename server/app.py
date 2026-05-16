@@ -6,17 +6,18 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .dependecies import init_db
-from .routers import login, main, auth, signup
+from .routers import main, auth, login, signup, profile
 from .paths import WEB_ROOT
 
 load_dotenv()
 app = FastAPI()
 
 app.mount("/static", StaticFiles(directory=str(WEB_ROOT), html=True), name="web")
-app.include_router(login.router)
 app.include_router(main.router)
-app.include_router(signup.router)
 app.include_router(auth.router)
+app.include_router(login.router)
+app.include_router(signup.router)
+app.include_router(profile.router)
 
 @app.on_event("startup")
 async def _startup():
