@@ -4,14 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Profile</title>
-    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/profile/styles.css">
 </html>
 <body>
     <div class="container">
         <h1>Profile</h1>
-        <p>Username: {{ user.username }}</p>
-        <p>Email: {{ user.email }}</p>
-        <a href="/logout">Logout</a>
+        <img id="avatar" src="/static/profile/default-avatar.png" alt="Avatar">
+        <div id="profile-info">
+            <!-- Profile information will be loaded here -->
+            <div id="display-name"></div>
+            <div id="reg-date"></div>
+        </div>
     </div>
+
+    <script src="/static/profile/script.js"></script>
 </body>
 </html>

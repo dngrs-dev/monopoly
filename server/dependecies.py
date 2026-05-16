@@ -29,7 +29,7 @@ class User(Base):
     avatar_url: Mapped[str] = mapped_column(String)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     
-DEFAULT_AVATAR_URL = "/static/assets/default_avatar.png"
+DEFAULT_AVATAR_URL = "/avatars/default_avatar.png"
 _pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 _slug_regex = re.compile(r'[^a-z0-9]+')
 

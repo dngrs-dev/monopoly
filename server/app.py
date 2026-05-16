@@ -6,7 +6,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .dependecies import init_db
 from .routers import main, auth, login, signup, profile, ws
-from .paths import WEB_ROOT
+from .paths import WEB_ROOT, AVATARS_DIR
 
 load_dotenv()
 app = FastAPI()
@@ -37,3 +37,6 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     if exc.status_code == 404:
         return FileResponse(WEB_ROOT / "404" / "index.html", status_code=404)
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
+app.mount("/avatars", StaticFiles(directory=str(AVATARS_DIR)), name="avatars")

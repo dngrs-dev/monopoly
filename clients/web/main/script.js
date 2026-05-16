@@ -29,20 +29,19 @@ signupButton.addEventListener("click", () => {
     window.location.href = "/signup";
 });
 
+profileButton.addEventListener("click", () => {
+    window.location.href = `/profile`;
+});
+
 async function loadSession() {
     const response = await fetch("/auth/session", {
         method: "GET",
         credentials: "include"
     });
 
-    console.log("Session response:", response);
     if (response.ok) {
-        const user = await response.json();
         guestActions.hidden = true;
-        userActions.hidden = false;
-        profileButton.addEventListener("click", () => {
-            window.location.href = `/profile/${user.id}`;
-        });
+        userActions.hidden = false;        
     } else {
         guestActions.hidden = false;
         userActions.hidden = true;
@@ -55,7 +54,6 @@ logoutButton.addEventListener("click", async () => {
         credentials: "include"
     });
     window.location.reload();
-    // loadSession();
 });
 
 loadSession();
