@@ -14,10 +14,17 @@
                 <h1>Profile</h1>
                 <img alt="Avatar" class="avatar">
                 <div class="profile-info">
-                    <span class="display-name">Display name</span>
-                    <input type="text" class="display-name-input" placeholder="Test User">
-                    <span class="profile-link">Profile link</span>
-                    <input type="text" class="profile-link-input" placeholder="testuser">
+                    <label class="display-name-row">
+                        <span class="display-name">Display name</span>
+                        <input type="text" class="display-name-input" autocomplete="off">
+                        <p id="display-name-status"></p>
+                    </label>
+                    <label class="profile-link-row">
+                        <span class="profile-link">Profile link</span>
+                        <span class="profile-link-prefix">/profile/</span>
+                        <input type="text" class="profile-link-input" autocomplete="off">
+                        <p id="profile-link-status"></p>
+                    </label>
                 </div>
             </div>
             <div class="section-security" hidden>
@@ -31,6 +38,10 @@
                     <button class="change-password">Change</button>
                 </div>
             </div>
+            <div class="section-privacy" hidden></div>
+            <div class="section-social" hidden></div>
+            <div class="section-notifications" hidden></div>
+            <div class="section-other" hidden></div>
         </div>
         <div class="menu">
             <div class="menu-title">Settings</div>
