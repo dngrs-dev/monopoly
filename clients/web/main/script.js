@@ -33,7 +33,7 @@ profileButton.addEventListener("click", () => {
     window.location.href = `/profile`;
 });
 
-async function loadSession() {
+async function loadCurrentUser() {
     const response = await fetch("/auth/session", {
         method: "GET",
         credentials: "include"
@@ -56,4 +56,4 @@ logoutButton.addEventListener("click", async () => {
     window.location.reload();
 });
 
-loadSession();
+loadCurrentUser();

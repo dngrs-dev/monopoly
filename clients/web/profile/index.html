@@ -7,15 +7,25 @@
     <link rel="stylesheet" href="/static/profile/styles.css">
 </html>
 <body>
-    <div class="container">
-        <h1>Profile</h1>
-        <img id="avatar" src="/static/profile/default-avatar.png" alt="Avatar">
-        <div id="profile-info">
-            <div id="id"></div>             
-            <div id="display-name"></div>
-            <div id="reg-date"></div>
+    <div class="header"></div>
+    <div class="public-profile">
+        <div class="widther">
+            <h1>Profile</h1>
+            <img id="avatar" src="/static/profile/default-avatar.png" alt="Avatar">
+            <div id="profile-info">
+                <div id="id"></div>             
+                <div id="display-name"></div>
+                <div id="reg-date"></div>
+            </div>
         </div>
     </div>
+    <div class="private-profile" hidden>
+        <div class="widther">
+            <button id="settings">Settings</button>
+            <button id="logout">Logout</button>
+        </div>
+    </div>
+    <div class="footer"></div>
 
     <script src="/static/profile/script.js"></script>
 </body>
