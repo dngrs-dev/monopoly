@@ -9,17 +9,41 @@
 <body>
     <div class="header"></div>
     <div class="widther">
-        <div class="content"></div>
+        <div class="section">
+            <div class="section-general">
+                <h1>Profile</h1>
+                <img alt="Avatar" class="avatar">
+                <div class="profile-info">
+                    <span class="display-name">Display name</span>
+                    <input type="text" class="display-name-input" placeholder="Test User">
+                    <span class="profile-link">Profile link</span>
+                    <input type="text" class="profile-link-input" placeholder="testuser">
+                </div>
+            </div>
+            <div class="section-security" hidden>
+                <h1>Security</h1>
+                <div class="security-info">
+                    <span class="email">Email</span>
+                    <span class="email-value">example@test.com</span>
+                    <button class="change-email">Change</button>
+                    <span class="password">Password</span>
+                    <span class="password-value">********</span>
+                    <button class="change-password">Change</button>
+                </div>
+            </div>
+        </div>
         <div class="menu">
             <div class="menu-title">Settings</div>
-            <a href="#general" class="menu-item_selected">General</a>
-            <a href="security" class="menu-item">Security</a>
+            <a href="#general" class="menu-item">General</a>
+            <a href="#security" class="menu-item">Security</a>
             <a href="#privacy" class="menu-item">Privacy</a>
             <a href="#social" class="menu-item">Social</a>
             <a href="#notifications" class="menu-item">Notifications</a>
-            <a href="other">Other</a>
+            <a href="#other" class="menu-item">Other</a>
         </div>
     </div>
     <div class="footer"></div>
+
+    <script src="/static/settings/script.js"></script>
 </body>
 </html>

@@ -45,7 +45,7 @@ async function loadCurrentUser() {
 }
 
 settingsButton.addEventListener("click", () => {
-    window.location.href = "/profile/settings";
+    window.location.href = "/settings";
 });
 logoutButton.addEventListener("click", async () => {
     await fetch("/auth/logout", {
