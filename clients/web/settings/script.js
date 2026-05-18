@@ -31,6 +31,8 @@ const intialHash = window.location.hash.replace("#", "") || "general";
 showSection(intialHash);
 
 
+
+// Load user session
 let currentUser = null;
 
 async function loadSession() {
@@ -49,11 +51,52 @@ async function loadSession() {
 
 loadSession();
 
+// General settings handling
 
 const displayNameInput = document.querySelector(".display-name-input");
 const displayNameStatus = document.getElementById("display-name-status");
+const displayNameSaveButton = document.getElementById("display-name-save");
 const profileLinkInput = document.querySelector(".profile-link-input");
 const profileLinkStatus = document.getElementById("profile-link-status");
+const profileLinkSaveButton = document.getElementById("profile-link-save");
+
+displayNameSaveButton.addEventListener("click", async () => {
+    if (!currentUser) return;
+    const newDisplayName = displayNameInput.value.trim();
+    if (!newDisplayName) return;
+    const response = await fetch("/settings/save", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ display_name: newDisplayName }),
+    });
+    if (response.ok) {
+        currentUser.display_name = newDisplayName;
+        checkStatus(displayNameInput, displayNameStatus, displayNameSaveButton);
+    } else {
+        displayNameStatus.textContent = "Failed to save display name. Please try again.";
+        displayNameStatus.dataset.state = "bad";
+    }
+});
+
+profileLinkSaveButton.addEventListener("click", async () => {
+    if (!currentUser) return;
+    const newProfileLink = profileLinkInput.value.trim();
+    if (!newProfileLink) return;
+    const response = await fetch("/settings/save", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ profile_link: newProfileLink }),
+    });
+    if (response.ok) {
+        currentUser.profile_link = newProfileLink;
+        checkStatus(profileLinkInput, profileLinkStatus, profileLinkSaveButton);
+    } else {
+        profileLinkStatus.textContent = "Failed to save profile link. Please try again.";
+        profileLinkStatus.dataset.state = "bad";
+    }
+});
 
 let checkTimer = null;
 let activeController = null;
@@ -63,8 +106,10 @@ function setStatus(statusElement, text, state) {
     statusElement.dataset.state = state; // "ok", "bad", "loading"
 }
 
-async function checkStatus(inputElement, statusElement) {
+async function checkStatus(inputElement, statusElement, buttonElement) {
     if (!currentUser) return;
+    buttonElement.disabled = true;
+    buttonElement.hidden = true;
 
     const value = inputElement.value.trim();
     if (!value) {
@@ -102,16 +147,19 @@ async function checkStatus(inputElement, statusElement) {
     console.log(data);
     if (data.available) {
         setStatus(statusElement, "Available", "ok");
+        buttonElement.disabled = false;
+        buttonElement.hidden = false;
     } else {
         setStatus(statusElement, "Already taken", "bad");
     }
 }
 
-function scheduleCheck(inputElement, statusElement) {
+function scheduleCheck(inputElement, statusElement, buttonElement) {
     clearTimeout(checkTimer);
-    checkTimer = setTimeout(() => checkStatus(inputElement, statusElement), 500);
+    checkTimer = setTimeout(() => checkStatus(inputElement, statusElement, buttonElement), 500);
 }
 
-displayNameInput.addEventListener("input", () => scheduleCheck(displayNameInput, displayNameStatus));
-profileLinkInput.addEventListener("input", () => scheduleCheck(profileLinkInput, profileLinkStatus));
-
+displayNameInput.addEventListener("input", () => scheduleCheck(displayNameInput, displayNameStatus, displayNameSaveButton));
+profileLinkInput.addEventListener("input", () => scheduleCheck(profileLinkInput, profileLinkStatus, profileLinkSaveButton));
+displayNameInput.addEventListener("blur", () => checkStatus(displayNameInput, displayNameStatus, displayNameSaveButton));
+profileLinkInput.addEventListener("blur", () => checkStatus(profileLinkInput, profileLinkStatus, profileLinkSaveButton));
