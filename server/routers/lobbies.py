@@ -4,7 +4,8 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..dependecies import User, get_db
@@ -20,10 +21,15 @@ class Lobby:
     players: set[int] = field(default_factory=set)
     max_players: int = 4
     
+class PlayerOut(BaseModel):
+    id: int
+    display_name: str
+    avatar_url: str
+    
 class LobbyOut(BaseModel):
     lobby_id: str
     host_id: int
-    players: list[int]
+    players: list[PlayerOut]
     max_players: int
     
 class LobbyManager:
@@ -127,17 +133,34 @@ async def leave_lobby(current_user: User = Depends(get_current_user), db: Sessio
     return {"ok": True}
 
 @router.get("/", response_model=list[LobbyOut])
-async def list_lobbies():
+async def list_lobbies(db: Session = Depends(get_db)):
     lobbies = await manager.list_lobbies()
-    return [
-        LobbyOut(
-            lobby_id=lobby.lobby_id,
-            host_id=lobby.host_id,
-            players=list(lobby.players),
-            max_players=lobby.max_players
+    
+    user_ids = {uid for lobby in lobbies for uid in lobby.players}
+    if user_ids:
+        users = db.scalars(select(User).where(User.id.in_(user_ids))).all()
+        user_map = {user.id: user for user in users}
+    else:
+        user_map = {}
+    result: list[LobbyOut] = []
+    for lobby in lobbies:
+        players = [
+            PlayerOut(
+                id=uid,
+                display_name=user_map[uid].display_name,
+                avatar_url=user_map[uid].avatar_url,
+            )
+            for uid in lobby.players
+        ]
+        result.append(
+            LobbyOut(
+                lobby_id=lobby.lobby_id,
+                host_id=lobby.host_id,
+                players=players,
+                max_players=lobby.max_players
+            )
         )
-        for lobby in lobbies
-    ]
+    return result
     
 @router.get("/me", response_model=LobbyOut | None)
 async def my_lobby(current_user: User = Depends(get_current_user)):

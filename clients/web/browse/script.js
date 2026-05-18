@@ -22,13 +22,32 @@ async function loadLobbies() {
     lobbies.forEach((lobby) => {
         const row = document.createElement("div");
         row.className = "lobby-row";
-        row.innerHTML = `
-            <div class="lobby-id">Id: ${lobby.lobby_id}</div>
-            <div class="lobby-players">Players: ${lobby.players.length} / ${lobby.max_players}</div>
-            <button data-id="${lobby.lobby_id}">Join</button>
-        `;
-        row.querySelector("button").addEventListener("click", () => joinLobby(lobby.lobby_id));
-        lobbyList.appendChild(row);   
+
+        const playersEl = document.createElement("div");
+        playersEl.className = "lobby-players";
+        
+        lobby.players.forEach((player) => {
+            const playerEl = document.createElement("div");
+            playerEl.className = "lobby-player";
+
+            const img = document.createElement("img");
+            img.src = player.avatar_url;
+            img.alt = player.display_name;
+
+            const name = document.createElement("span");
+            name.textContent = player.display_name;
+
+            playerEl.append(img, name);
+            playersEl.appendChild(playerEl);
+        });
+
+        const joinButton = document.createElement("button");
+        joinButton.textContent = "Join";
+        joinButton.addEventListener("click", () => joinLobby(lobby.lobby_id));
+        joinButton.dataset.id = lobby.lobby_id;
+
+        row.append(playersEl, joinButton);
+        lobbyList.appendChild(row);
     });
 }
 
@@ -64,3 +83,4 @@ createButton.addEventListener("click", async () => {
 });
 
 loadLobbies();
+setInterval(loadLobbies, 2000);
