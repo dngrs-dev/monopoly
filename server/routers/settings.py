@@ -1,10 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException
+from pathlib import Path
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..paths import WEB_ROOT
+from ..paths import WEB_ROOT, AVATARS_DIR
 from ..dependecies import User, get_db
 from ..jwt_utils import get_current_user
 
@@ -47,4 +50,21 @@ def save_settings(payload: UpdateSettings, current_user: User = Depends(get_curr
         "display_name": current_user.display_name,
         "profile_link": current_user.profile_link
     }
+    
+@router.post("/avatar")
+async def update_avatar(file: UploadFile = File(...), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if file.content_type not in {"image/png", "image/jpeg", "image/webp"}:
+        raise HTTPException(status_code=400, detail="Invalid file type")
+    
+    suffix = Path(file.filename).suffix.lower()
+    filename = f"{current_user.id}-{uuid4().hex}{suffix}"
+    path = AVATARS_DIR / filename
+    
+    content = await file.read()
+    path.write_bytes(content)
+    
+    current_user.avatar_url = f"/avatars/{filename}"
+    db.commit()
+    
+    return {"avatar_url": current_user.avatar_url}
         

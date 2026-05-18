@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .dependecies import init_db
-from .routers import main, auth, login, signup, profile, ws, settings
+from .routers import main, auth, login, signup, profile, ws, settings, avatars
 from .paths import WEB_ROOT, AVATARS_DIR
 
 load_dotenv()
@@ -19,6 +19,7 @@ app.include_router(signup.router)
 app.include_router(profile.router)
 app.include_router(ws.router)
 app.include_router(settings.router)
+app.include_router(avatars.router)
 
 @app.on_event("startup")
 async def _startup():

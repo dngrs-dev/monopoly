@@ -163,3 +163,42 @@ displayNameInput.addEventListener("input", () => scheduleCheck(displayNameInput,
 profileLinkInput.addEventListener("input", () => scheduleCheck(profileLinkInput, profileLinkStatus, profileLinkSaveButton));
 displayNameInput.addEventListener("blur", () => checkStatus(displayNameInput, displayNameStatus, displayNameSaveButton));
 profileLinkInput.addEventListener("blur", () => checkStatus(profileLinkInput, profileLinkStatus, profileLinkSaveButton));
+
+
+
+// Avatar change handling
+
+const avatarImage = document.getElementById("avatar-image");
+const avatarFileInput = document.getElementById("avatar-file-input");
+const avatarStatus = document.getElementById("avatar-status");
+
+avatarFileInput.addEventListener("change", async () => {
+    const file = avatarFileInput.files[0];
+    if (!file) return;
+
+    // Preview
+    const previewUrl = URL.createObjectURL(file);
+    avatarImage.src = previewUrl;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch("/settings/avatar", {
+        method: "POST",
+        credentials: "include",
+        body: formData
+    });
+
+    if (!response.ok) {
+        avatarStatus.textContent = "Failed to upload avatar. Please try again.";
+        avatarStatus.dataset.state = "bad";
+        return;
+    }
+
+    const data = await response.json();
+    avatarImage.src = data.avatar_url;
+    avatarStatus.textContent = "Avatar updated successfully!";
+    avatarStatus.dataset.state = "ok";
+
+    URL.revokeObjectURL(previewUrl);
+});
