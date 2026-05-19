@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, WebSocket
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -48,7 +48,7 @@ class LobbyManager:
                 lobby_id=lobby_id,
                 host_id=user_id,
                 created_at=datetime.now(timezone.utc),
-                players=[user_id],
+                players={user_id},
                 max_players=max_players
             )
             
@@ -72,7 +72,7 @@ class LobbyManager:
             self._user_to_lobby[user_id] = lobby_id
             return lobby
         
-    async def leave_lobby(self, user_id: int) -> None:
+    async def leave_lobby(self, user_id: int) -> tuple[str, bool, int | None]:
         async with self._lock:
             lobby_id = self._user_to_lobby.get(user_id)
             if not lobby_id:
@@ -80,17 +80,25 @@ class LobbyManager:
             
             lobby = self._lobbies.get(lobby_id)
             if not lobby:
+                self._user_to_lobby.pop(user_id, None)
                 raise HTTPException(status_code=404, detail="Lobby not found")
+            
+            was_host = lobby.host_id == user_id
             
             lobby.players.discard(user_id)
             self._user_to_lobby.pop(user_id, None)
             
             if not lobby.players:
                 self._lobbies.pop(lobby_id, None)
-                return
+                return lobby_id, True, None
             
-            if lobby.host_id == user_id:
+            new_host_id = None
+            if was_host:
                 lobby.host_id = next(iter(lobby.players))
+                new_host_id = lobby.host_id
+                
+            return lobby_id, False, new_host_id
+            
                 
     async def list_lobbies(self) -> list[Lobby]:
         async with self._lock:
@@ -103,73 +111,124 @@ class LobbyManager:
                 return None
             return self._lobbies.get(lobby_id)
         
+
+class LobbyHub:
+    def __init__(self) -> None:
+        self._connections: set = set()
+        self._lock = asyncio.Lock()
         
+    async def connect(self, websocket: WebSocket) -> None:
+        await websocket.accept()
+        async with self._lock:
+            self._connections.add(websocket)
+            
+    async def disconnect(self, websocket: WebSocket) -> None:
+        async with self._lock:
+            self._connections.discard(websocket)
+            
+    async def broadcast(self, message: dict) -> None:
+        async with self._lock:
+            connections = list(self._connections)
+            
+        dead = []
+        for ws in connections:
+            try:
+                await ws.send_json(message)
+            except Exception:
+                dead.append(ws)
+                
+        if dead:
+            async with self._lock:
+                for ws in dead:
+                    self._connections.discard(ws)
+                                        
 manager = LobbyManager()
+hub = LobbyHub()
 
-
-@router.post("/create", response_model=LobbyOut, status_code=status.HTTP_201_CREATED)
-async def create_lobby(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    lobby = await manager.create_lobby(current_user.id)
-    return LobbyOut(
-        lobby_id=lobby.lobby_id,
-        host_id=lobby.host_id,
-        players=list(lobby.players),
-        max_players=lobby.max_players
-    )
-    
-@router.post("/{lobby_id}/join", response_model=LobbyOut)
-async def join_lobby(lobby_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    lobby = await manager.join_lobby(current_user.id, lobby_id)
-    return LobbyOut(
-        lobby_id=lobby.lobby_id,
-        host_id=lobby.host_id,
-        players=list(lobby.players),
-        max_players=lobby.max_players
-    )
-    
-@router.post("/leave")
-async def leave_lobby(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    await manager.leave_lobby(current_user.id)
-    return {"ok": True}
-
-@router.get("/", response_model=list[LobbyOut])
-async def list_lobbies(db: Session = Depends(get_db)):
-    lobbies = await manager.list_lobbies()
-    
-    user_ids = {uid for lobby in lobbies for uid in lobby.players}
+def build_lobby_payloads(lobbies: list[Lobby], db: Session) -> list[dict]:
+    user_ids = {user_id for lobby in lobbies for user_id in lobby.players}
     if user_ids:
         users = db.scalars(select(User).where(User.id.in_(user_ids))).all()
         user_map = {user.id: user for user in users}
     else:
         user_map = {}
-    result: list[LobbyOut] = []
+        
+    payloads: list[dict] = []
     for lobby in lobbies:
         players = [
-            PlayerOut(
-                id=uid,
-                display_name=user_map[uid].display_name,
-                avatar_url=user_map[uid].avatar_url,
-            )
-            for uid in lobby.players
+            {
+                "id": user_id,
+                "display_name": user_map[user_id].display_name,
+                "avatar_url": user_map[user_id].avatar_url,
+            }
+            for user_id in lobby.players
+            if user_id in user_map
         ]
-        result.append(
-            LobbyOut(
-                lobby_id=lobby.lobby_id,
-                host_id=lobby.host_id,
-                players=players,
-                max_players=lobby.max_players
-            )
+        payloads.append(
+            {
+                "lobby_id": lobby.lobby_id,
+                "host_id": lobby.host_id,
+                "players": players,
+                "max_players": lobby.max_players,
+            }
         )
-    return result
+    return payloads
+
+@router.post("/create", response_model=LobbyOut, status_code=status.HTTP_201_CREATED)
+async def create_lobby(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    lobby = await manager.create_lobby(current_user.id)
+    payload = build_lobby_payloads([lobby], db)[0]
+    await hub.broadcast({"type": "create", "lobby": payload})
+    return payload
+
+@router.post("/join/{lobby_id}", response_model=LobbyOut)
+async def join_lobby(lobby_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    lobby = await manager.join_lobby(current_user.id, lobby_id)
+    await hub.broadcast(
+        {
+            "type": "join",
+            "lobby_id": lobby.lobby_id,
+            "player": {
+                "id": current_user.id,
+                "display_name": current_user.display_name,
+                "avatar_url": current_user.avatar_url,
+            }
+        }
+    )
+    return build_lobby_payloads([lobby], db)[0]
+
+@router.post("/leave")
+async def leave_lobby(current_user: User = Depends(get_current_user)):
+    lobby_id, removed, new_host_id = await manager.leave_lobby(current_user.id)
     
+    if removed:
+        await hub.broadcast({"type": "remove", "lobby_id": lobby_id})
+    else:
+        await hub.broadcast(
+            {
+                "type": "leave",
+                "lobby_id": lobby_id,
+                "player_id": current_user.id,
+            }
+        )
+        if new_host_id:
+            await hub.broadcast(
+                {
+                    "type": "host",
+                    "lobby_id": lobby_id,
+                    "host_id": new_host_id,
+                }
+            )
+    return {"ok": True}
+
+@router.get("/", response_model=list[LobbyOut])
+async def list_lobbies(db: Session = Depends(get_db)):
+    lobbies = await manager.list_lobbies()
+    return build_lobby_payloads(lobbies, db)
+
 @router.get("/me", response_model=LobbyOut | None)
-async def my_lobby(current_user: User = Depends(get_current_user)):
+async def my_lobby(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     lobby = await manager.get_user_lobby(current_user.id)
     if not lobby:
         return None
-    return LobbyOut(
-        lobby_id=lobby.lobby_id,
-        host_id=lobby.host_id,
-        players=list(lobby.players),
-        max_players=lobby.max_players
-    )
+    return build_lobby_payloads([lobby], db)[0]
