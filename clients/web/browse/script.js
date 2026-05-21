@@ -1,6 +1,5 @@
+// Lobbies list management and UI rendering
 const lobbyList = document.getElementById("lobby-list");
-const createButton = document.getElementById("create-lobby");
-
 const lobbies = new Map();
 
 function renderAll() {
@@ -42,6 +41,15 @@ function renderAll() {
             joinButton.textContent = "Join";
             joinButton.addEventListener("click", () => joinLobby(lobby.lobby_id));
             row.append(joinButton);
+        }
+
+        if (lobby.players.length > 0) {
+            if (lobby.host_id === lobby.players[0].player_id) { // If the host not the first player, this should be changed
+                const deleteButton = document.createElement("button");
+                deleteButton.textContent = "Delete";
+                deleteButton.addEventListener("click", () => deleteLobby());
+                row.append(deleteButton);
+            }
         }
 
         lobbyList.appendChild(row);
@@ -88,13 +96,14 @@ async function joinLobby(lobbyId) {
     });
 }
 
-createButton.addEventListener("click", async () => {
-    const response = await fetch("/lobbies/create", {
+async function deleteLobby() {
+    const response = await fetch(`/lobbies/delete`, {
         method: "POST",
         credentials: "include"
     });
-});
+}
 
+// Websocket setup (lobbies updates)
 const wsProto = location.protocol === "https:" ? "wss" : "ws";
 const ws = new WebSocket(`${wsProto}://${location.host}/ws/lobbies`);
 
@@ -134,3 +143,38 @@ ws.onclose = (event) => {
         window.location.href = "/login";
     }
 }
+
+
+// Create lobby modal
+const createButton = document.getElementById("create-lobby");
+const modal = document.getElementById("create-lobby-modal");
+const confirmButton = document.getElementById("create-lobby-confirm");
+const cancelButton = document.getElementById("create-lobby-cancel");
+const maxPlayersInput = document.getElementById("lobby-max-players");
+
+createButton.addEventListener("click", () => {
+    modal.hidden = false;
+});
+
+cancelButton.addEventListener("click", () => {
+    modal.hidden = true;
+});
+
+confirmButton.addEventListener("click", async () => {
+    const maxPlayers = Number(maxPlayersInput.value);
+
+    const response = await fetch("/lobbies/create", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ max_players: maxPlayers })
+    });
+
+    if (!response.ok) {
+        alert("Failed to create lobby");
+        return;
+    }
+
+    modal.hidden = true;
+
+});

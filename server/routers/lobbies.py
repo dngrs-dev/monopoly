@@ -221,6 +221,30 @@ async def leave_lobby(current_user: User = Depends(get_current_user)):
             )
     return {"ok": True}
 
+@router.post("/delete")
+async def delete_lobby(current_user: User = Depends(get_current_user)):
+    lobby = await manager.get_user_lobby(current_user.id)
+    if not lobby:
+        raise HTTPException(status_code=404, detail="User is not in a lobby")
+    
+    if lobby.host_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the host can delete the lobby")
+    
+    for player_id in list(lobby.players):
+        lobby_id, removed, new_host_id = await manager.leave_lobby(current_user.id)
+        
+        if not removed:
+            await hub.broadcast(
+                {
+                    "type": "leave",
+                    "lobby_id": lobby_id
+                }
+            )
+            
+    await hub.broadcast({"type": "remove", "lobby_id": lobby.lobby_id})
+    
+    return {"ok": True}
+
 @router.get("/", response_model=list[LobbyOut])
 async def list_lobbies(db: Session = Depends(get_db)):
     lobbies = await manager.list_lobbies()
