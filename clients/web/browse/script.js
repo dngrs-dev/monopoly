@@ -44,7 +44,7 @@ function renderAll() {
         }
 
         if (lobby.players.length > 0) {
-            if (lobby.host_id === lobby.players[0].player_id) { // If the host not the first player, this should be changed
+            if (lobby.host_id === lobby.players[0].id) { // If the host not the first player, this should be changed
                 const deleteButton = document.createElement("button");
                 deleteButton.textContent = "Delete";
                 deleteButton.addEventListener("click", () => deleteLobby());
