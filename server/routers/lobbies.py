@@ -8,6 +8,12 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from boards.classic import build_classic_board
+from engine.dice import Dice
+from engine.game import Game
+from engine.player import Player
+from server.routers.games import game_sessions
+
 from ..dependecies import User, get_db
 from ..jwt_utils import get_current_user
 
@@ -102,6 +108,15 @@ class LobbyManager:
                 
             return lobby_id, False, new_host_id
             
+    async def delete_lobby(self, lobby_id: str) -> set[int]:
+        async with self._lock:
+            lobby = self._lobbies.pop(lobby_id, None)
+            if not lobby:
+                raise HTTPException(status_code=404, detail="Lobby not found")
+
+            for user_id in lobby.players:
+                self._user_to_lobby.pop(user_id, None)
+            return set(lobby.players)
                 
     async def list_lobbies(self) -> list[Lobby]:
         async with self._lock:
@@ -114,6 +129,9 @@ class LobbyManager:
                 return None
             return self._lobbies.get(lobby_id)
         
+    async def get_lobby(self, lobby_id: str) -> Lobby | None:
+        async with self._lock:
+            return self._lobbies.get(lobby_id)
 
 class LobbyHub:
     def __init__(self) -> None:
@@ -229,23 +247,12 @@ async def delete_lobby(current_user: User = Depends(get_current_user)):
     lobby = await manager.get_user_lobby(current_user.id)
     if not lobby:
         raise HTTPException(status_code=404, detail="User is not in a lobby")
-    
+
     if lobby.host_id != current_user.id:
         raise HTTPException(status_code=403, detail="Only the host can delete the lobby")
-    
-    for player_id in list(lobby.players):
-        lobby_id, removed, new_host_id = await manager.leave_lobby(current_user.id)
-        
-        if not removed:
-            await hub.broadcast(
-                {
-                    "type": "leave",
-                    "lobby_id": lobby_id
-                }
-            )
-            
+
+    await manager.delete_lobby(lobby.lobby_id)
     await hub.broadcast({"type": "remove", "lobby_id": lobby.lobby_id})
-    
     return {"ok": True}
 
 @router.get("/", response_model=list[LobbyOut])
@@ -259,3 +266,25 @@ async def my_lobby(current_user: User = Depends(get_current_user), db: Session =
     if not lobby:
         return None
     return build_lobby_payloads([lobby], db)[0]
+
+
+@router.post("/start/{lobby_id}")
+async def start_game(lobby_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    lobby = await manager.get_lobby(lobby_id)
+    if not lobby:
+        raise HTTPException(status_code=404, detail="Lobby not found")
+
+    if lobby.host_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the host can start the game")
+
+    if await game_sessions.has(lobby_id):
+        raise HTTPException(status_code=409, detail="Game already started")
+
+    user_ids = list(lobby.players)
+    board = build_classic_board()
+    players = [Player(id=index, balance=1500) for index in range(len(user_ids))]
+    game = Game(board=board, players=players, dice=Dice())
+
+    await game_sessions.create(lobby_id, user_ids, game)
+    await hub.broadcast({"type": "started", "lobby_id": lobby_id})
+    return {"ok": True, "lobby_id": lobby_id}

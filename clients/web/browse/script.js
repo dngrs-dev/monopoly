@@ -1,6 +1,38 @@
 // Lobbies list management and UI rendering
 const lobbyList = document.getElementById("lobby-list");
 const lobbies = new Map();
+let currentUserId = null;
+let currentLobbyId = null;
+
+async function loadCurrentUser() {
+    const response = await fetch("/auth/session", {
+        method: "GET",
+        credentials: "include"
+    });
+    if (!response.ok) {
+        window.location.href = "/login";
+        return;
+    }
+    const user = await response.json();
+    currentUserId = user.id;
+}
+
+async function loadCurrentLobby() {
+    const response = await fetch("/lobbies/me", {
+        method: "GET",
+        credentials: "include"
+    });
+    if (response.ok) {
+        const lobby = await response.json();
+        currentLobbyId = lobby ? lobby.lobby_id : null;
+    } else {
+        currentLobbyId = null;
+    }
+}
+
+function isUserInLobby(lobby) {
+    return currentUserId && lobby.players.some((p) => p.id === currentUserId);
+}
 
 function renderAll() {
     lobbyList.textContent = "";
@@ -36,20 +68,33 @@ function renderAll() {
         });
         row.append(meta, playersEl);
 
-        if (lobby.players.length < lobby.max_players) {
+        const userInLobby = isUserInLobby(lobby);
+        const isHost = currentUserId && lobby.host_id === currentUserId;
+
+        if (!currentLobbyId && lobby.players.length < lobby.max_players) {
             const joinButton = document.createElement("button");
             joinButton.textContent = "Join";
             joinButton.addEventListener("click", () => joinLobby(lobby.lobby_id));
             row.append(joinButton);
         }
 
-        if (lobby.players.length > 0) {
-            if (lobby.host_id === lobby.players[0].id) { // If the host not the first player, this should be changed
-                const deleteButton = document.createElement("button");
-                deleteButton.textContent = "Delete";
-                deleteButton.addEventListener("click", () => deleteLobby());
-                row.append(deleteButton);
-            }
+        if (userInLobby && !isHost) {
+            const leaveButton = document.createElement("button");
+            leaveButton.textContent = "Leave";
+            leaveButton.addEventListener("click", () => leaveLobby());
+            row.append(leaveButton);
+        }
+
+        if (isHost) {
+            const startButton = document.createElement("button");
+            startButton.textContent = "Start";
+            startButton.addEventListener("click", () => startGame(lobby.lobby_id));
+            row.append(startButton);
+
+            const deleteButton = document.createElement("button");
+            deleteButton.textContent = "Delete";
+            deleteButton.addEventListener("click", () => deleteLobby());
+            row.append(deleteButton);
         }
 
         lobbyList.appendChild(row);
@@ -63,6 +108,9 @@ function upsertLobby(lobby) {
 
 function removeLobby(lobbyId) {
     lobbies.delete(lobbyId);
+    if (currentLobbyId === lobbyId) {
+        currentLobbyId = null;
+    }
     renderAll();
 }
 
@@ -94,6 +142,30 @@ async function joinLobby(lobbyId) {
         method: "POST",
         credentials: "include"
     });
+    if (response.ok) {
+        const lobby = await response.json();
+        currentLobbyId = lobby.lobby_id;
+    }
+}
+
+async function leaveLobby() {
+    const response = await fetch(`/lobbies/leave`, {
+        method: "POST",
+        credentials: "include"
+    });
+    if (response.ok) {
+        currentLobbyId = null;
+    }
+}
+
+async function startGame(lobbyId) {
+    const response = await fetch(`/lobbies/start/${lobbyId}`, {
+        method: "POST",
+        credentials: "include"
+    });
+    if (respone.ok) {
+        window.location.href = `/games/${lobbyId}`;
+    }
 }
 
 async function deleteLobby() {
@@ -134,6 +206,13 @@ ws.onmessage = (event) => {
 
     if (msg.type === "host") {
         setHost(msg.lobby_id, msg.host_id);
+    }
+
+    if (msg.type === "started") {
+        const lobby = lobbies.get(msg.lobby_id);
+        if (lobby && isUserInLobby(lobby)) {
+            window.location.href = `/games/${msg.lobby_id}`;
+        }
     }
 };
 
@@ -178,3 +257,9 @@ confirmButton.addEventListener("click", async () => {
     modal.hidden = true;
 
 });
+
+// Initial load
+(async function init() {
+    await loadCurrentUser();
+    await loadCurrentLobby();
+})();
