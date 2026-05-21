@@ -32,6 +32,9 @@ class LobbyOut(BaseModel):
     players: list[PlayerOut]
     max_players: int
     
+class CreateLobbyRequest(BaseModel):
+    max_players: int = 4
+    
 class LobbyManager:
     def __init__(self):
         self._lobbies: dict[str, Lobby] = {}
@@ -175,8 +178,8 @@ def build_lobby_payloads(lobbies: list[Lobby], db: Session) -> list[dict]:
     return payloads
 
 @router.post("/create", response_model=LobbyOut, status_code=status.HTTP_201_CREATED)
-async def create_lobby(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    lobby = await manager.create_lobby(current_user.id)
+async def create_lobby(payload: CreateLobbyRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    lobby = await manager.create_lobby(current_user.id, max_players=payload.max_players)
     payload = build_lobby_payloads([lobby], db)[0]
     await hub.broadcast({"type": "create", "lobby": payload})
     return payload
