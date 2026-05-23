@@ -3,6 +3,7 @@ const lobbyList = document.getElementById("lobby-list");
 const lobbies = new Map();
 let currentUserId = null;
 let currentLobbyId = null;
+let ws = null;
 
 async function loadCurrentUser() {
     const response = await fetch("/auth/session", {
@@ -71,7 +72,7 @@ function renderAll() {
         const userInLobby = isUserInLobby(lobby);
         const isHost = currentUserId && lobby.host_id === currentUserId;
 
-        if (!currentLobbyId && lobby.players.length < lobby.max_players) {
+        if (!currentLobbyId && lobby.players.length < lobby.max_players && !userInLobby) {
             const joinButton = document.createElement("button");
             joinButton.textContent = "Join";
             joinButton.addEventListener("click", () => joinLobby(lobby.lobby_id));
@@ -117,7 +118,7 @@ function removeLobby(lobbyId) {
 function addPlayer(lobbyId, player) {
     const lobby = lobbies.get(lobbyId);
     if (!lobby) return;
-    if (!lobby.players.find((p) => p.player_id === player.player_id)) {
+    if (!lobby.players.find((p) => p.id === player.player_id)) {
         lobby.players.push(player);
     }
     renderAll();
@@ -126,7 +127,7 @@ function addPlayer(lobbyId, player) {
 function removePlayer(lobbyId, playerId) {
     const lobby = lobbies.get(lobbyId);
     if (!lobby) return;
-    lobby.players = lobby.players.filter((p) => p.player_id !== playerId);
+    lobby.players = lobby.players.filter((p) => p.id !== playerId);
     renderAll();
 }
 
@@ -175,54 +176,6 @@ async function deleteLobby() {
     });
 }
 
-// Websocket setup (lobbies updates)
-const wsProto = location.protocol === "https:" ? "wss" : "ws";
-const ws = new WebSocket(`${wsProto}://${location.host}/ws/lobbies`);
-
-ws.onmessage = (event) => {
-    const msg = JSON.parse(event.data);
-
-    if (msg.type === "init") {
-        lobbies.clear();
-        msg.lobbies.forEach((lobby) => lobbies.set(lobby.lobby_id, lobby));
-        renderAll();
-    }
-
-    if (msg.type === "create") {
-        upsertLobby(msg.lobby);
-    }
-
-    if (msg.type === "join") {
-        addPlayer(msg.lobby_id, msg.player);
-    }
-
-    if (msg.type === "leave") {
-        removePlayer(msg.lobby_id, msg.player_id);
-    }
-
-    if (msg.type === "remove") {
-        removeLobby(msg.lobby_id);
-    }
-
-    if (msg.type === "host") {
-        setHost(msg.lobby_id, msg.host_id);
-    }
-
-    if (msg.type === "started") {
-        const lobby = lobbies.get(msg.lobby_id);
-        if (lobby && isUserInLobby(lobby)) {
-            window.location.href = `/games/${msg.lobby_id}`;
-        }
-    }
-};
-
-ws.onclose = (event) => {
-    console.log("WebSocket closed:", event);
-    if (event.code === 1006) {
-        window.location.href = "/login";
-    }
-}
-
 
 // Create lobby modal
 const createButton = document.getElementById("create-lobby");
@@ -258,8 +211,62 @@ confirmButton.addEventListener("click", async () => {
 
 });
 
-// Initial load
-(async function init() {
+
+
+async function init() {
     await loadCurrentUser();
     await loadCurrentLobby();
-})();
+    connectWebSocket();
+}
+
+// Websocket setup (lobbies updates)
+function connectWebSocket() {
+    const wsProto = location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${wsProto}://${location.host}/ws/lobbies`);
+
+    ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+
+        if (msg.type === "init") {
+            lobbies.clear();
+            msg.lobbies.forEach((lobby) => lobbies.set(lobby.lobby_id, lobby));
+            renderAll();
+        }
+
+        if (msg.type === "create") {
+            upsertLobby(msg.lobby);
+        }
+
+        if (msg.type === "join") {
+            addPlayer(msg.lobby_id, msg.player);
+        }
+
+        if (msg.type === "leave") {
+            removePlayer(msg.lobby_id, msg.player_id);
+        }
+
+        if (msg.type === "remove") {
+            removeLobby(msg.lobby_id);
+        }
+
+        if (msg.type === "host") {
+            setHost(msg.lobby_id, msg.host_id);
+        }
+
+        if (msg.type === "started") {
+            const lobby = lobbies.get(msg.lobby_id);
+            if (lobby && isUserInLobby(lobby)) {
+                window.location.href = `/games/${msg.lobby_id}`;
+            }
+        }
+    };
+
+    ws.onclose = (event) => {
+        console.log("WebSocket closed:", event);
+        if (event.code === 1006) {
+            window.location.href = "/login";
+        }
+    };
+}
+
+init();
