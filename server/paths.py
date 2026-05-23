@@ -8,3 +8,4 @@ WEB_ROOT = CLIENTS_ROOT / "web"
 DB_PATH = os.getenv("DB_PATH", "./.data/monopoly.db")
 
 AVATARS_DIR = Path(__file__).resolve().parents[1] / ".data" / "avatars"
+ASSETS_DIR = Path(__file__).resolve().parents[1] / ".data" / "assets"

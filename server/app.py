@@ -6,7 +6,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .dependecies import init_db
 from .routers import main, auth, login, signup, profile, ws, settings, avatars, lobbies, browse, games
-from .paths import WEB_ROOT, AVATARS_DIR
+from .paths import WEB_ROOT, AVATARS_DIR, ASSETS_DIR
 
 load_dotenv()
 app = FastAPI()
@@ -33,15 +33,15 @@ async def _startup():
 async def _shutdown():
     print("Shutting down...")
     
-@app.get("/favicon.ico")
-async def favicon():
-    return FileResponse(WEB_ROOT / "favicon.ico")
-    
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     if exc.status_code == 404:
         return FileResponse(WEB_ROOT / "404" / "index.html", status_code=404)
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
-
 app.mount("/avatars", StaticFiles(directory=str(AVATARS_DIR)), name="avatars")
+app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
+
+@app.get("/favicon.ico")
+async def favicon():
+    return FileResponse(ASSETS_DIR / "favicon.ico")
