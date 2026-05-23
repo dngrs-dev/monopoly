@@ -73,7 +73,7 @@ function renderAll() {
         const userInLobby = isUserInLobby(lobby);
         const isHost = currentUserId && lobby.host_id === currentUserId;
 
-        if (!currentLobbyId && lobby.players.length < lobby.max_players && !userInLobby) {
+        if (!currentLobbyId && !lobby.started && lobby.players.length < lobby.max_players && !userInLobby) {
             const joinButton = document.createElement("button");
             joinButton.textContent = "Join";
             joinButton.addEventListener("click", () => joinLobby(lobby.lobby_id));
@@ -122,6 +122,9 @@ function addPlayer(lobbyId, player) {
     if (!lobby.players.find((p) => p.id === player.player_id)) {
         lobby.players.push(player);
     }
+    if (player.id === currentUserId) {
+        currentLobbyId = lobbyId;
+    }
     renderAll();
 }
 
@@ -129,6 +132,9 @@ function removePlayer(lobbyId, playerId) {
     const lobby = lobbies.get(lobbyId);
     if (!lobby) return;
     lobby.players = lobby.players.filter((p) => p.id !== playerId);
+    if (playerId === currentUserId && currentLobbyId === lobbyId) {
+        currentLobbyId = null;
+    }
     renderAll();
 }
 
@@ -165,7 +171,7 @@ async function startGame(lobbyId) {
         method: "POST",
         credentials: "include"
     });
-    if (respone.ok) {
+    if (response.ok) {
         window.location.href = `/games/${lobbyId}`;
     }
 }
@@ -255,10 +261,14 @@ function connectWebSocket() {
         }
 
         if (msg.type === "started") {
-            const lobby = lobbies.get(msg.lobby_id);
-            if (lobby && isUserInLobby(lobby)) {
-                window.location.href = `/games/${msg.lobby_id}`;
+            const lobby = msg.lobby;
+            lobbies.set(lobby.lobby_id, lobby);
+            if (lobby.players.some((p) => p.id === currentUserId)) {
+                currentLobbyId = lobby.lobby_id;
+                window.location.href = `/games/${lobby.lobby_id}`;
             }
+
+            renderAll();
         }
     };
 

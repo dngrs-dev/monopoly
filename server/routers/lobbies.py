@@ -26,6 +26,7 @@ class Lobby:
     created_at: datetime
     players: set[int] = field(default_factory=set)
     max_players: int = 4
+    started: bool = False
     
 class PlayerOut(BaseModel):
     id: int
@@ -37,6 +38,7 @@ class LobbyOut(BaseModel):
     host_id: int
     players: list[PlayerOut]
     max_players: int
+    started: bool
     
 class CreateLobbyRequest(BaseModel):
     max_players: int = 4
@@ -74,8 +76,11 @@ class LobbyManager:
             if not lobby:
                 raise HTTPException(status_code=404, detail="Lobby not found")
             
+            if lobby.started:
+                raise HTTPException(status_code=409, detail="Game already started")
+            
             if len(lobby.players) >= lobby.max_players:
-                raise HTTPException(status_code=400, detail="Lobby is full")
+                raise HTTPException(status_code=409, detail="Lobby is full")
             
             lobby.players.add(user_id)
             self._user_to_lobby[user_id] = lobby_id
@@ -191,6 +196,7 @@ def build_lobby_payloads(lobbies: list[Lobby], db: Session) -> list[dict]:
                 "host_id": lobby.host_id,
                 "players": players,
                 "max_players": lobby.max_players,
+                "started": lobby.started,
             }
         )
     return payloads
@@ -285,6 +291,9 @@ async def start_game(lobby_id: str, current_user: User = Depends(get_current_use
     players = [Player(id=index, balance=1500) for index in range(len(user_ids))]
     game = Game(board=board, players=players, dice=Dice())
 
+    lobby.started = True
     await game_sessions.create(lobby_id, user_ids, game)
-    await hub.broadcast({"type": "started", "lobby_id": lobby_id})
+    
+    payload = build_lobby_payloads([lobby], db)[0]
+    await hub.broadcast({"type": "started", "lobby": payload})
     return {"ok": True, "lobby_id": lobby_id}
