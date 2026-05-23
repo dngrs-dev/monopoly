@@ -58,6 +58,7 @@ function renderAll() {
             playerEl.className = "lobby-player";
 
             const img = document.createElement("img");
+            img.className = "avatar avatar--sm";
             img.src = player.avatar_url;
             img.alt = player.display_name;
 

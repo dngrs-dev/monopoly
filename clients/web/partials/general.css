@@ -1,10 +1,23 @@
 :root {
     --max-content-width: 1000px;
+
+    /* background */
     --color-page-bg: #ccc;
     --color-surface-dark: #333;
+
+    /* buttons */
     --color-button-bg: #555;
     --color-button-bg-hover: #777;
+
+    /* text */
     --color-text-light: #fff;
+
+    /* avatar */
+    --avatar-size: 96px;
+    --avatar-size-sm: 32px;
+    --avatar-size-lg: 128px;
+    --avatar-ring-width: 2px;
+    --avatar-ring-color: rgba(255, 255, 255, 0.7);
 }
 
 body {
@@ -22,4 +35,30 @@ body {
     margin: 0 auto;
     padding: 0 16px;
     box-sizing: border-box;
+}
+
+.avatar {
+    width: var(--avatar-size);
+    height: var(--avatar-size);
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+    /* background-color: var(--color-surface-dark); */
+    transition: box-shadow 160ms ease, transform 160ms ease;
+    box-shadow: 0 0 0 var(--avatar-ring-width) var(--avatar-ring-color);
+}
+
+.avatar:hover {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+    transform: translateY(-1px);
+}
+
+.avatar--sm {
+    width: var(--avatar-size-sm);
+    height: var(--avatar-size-sm);
+}
+
+.avatar--lg {
+    width: var(--avatar-size-lg);
+    height: var(--avatar-size-lg);
 }
