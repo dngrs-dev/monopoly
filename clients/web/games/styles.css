@@ -1,0 +1,148 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&display=swap");
+
+:root {
+    --board-size: min(86vh, 900px);
+    --board-bg: #f2efe9;
+    --board-edge: #c7bba6;
+    --board-center: #faf7f1;
+    --panel-bg: #f9f5ee;
+    --panel-border: #d6cbb7;
+    --text-dark: #1c1b18;
+    --accent: #2b5d4a;
+}
+
+body {
+    font-family: "Space Grotesk", sans-serif;
+    color: var(--text-dark);
+    background:
+        radial-gradient(circle at 10% 10%, #e9e3d7, transparent 60%),
+        radial-gradient(circle at 90% 20%, #d7d1c6, transparent 55%),
+        #d8d2c6;
+}
+
+.game-shell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    padding: 24px;
+    min-height: 80vh;
+}
+
+.board-panel {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.board {
+    width: var(--board-size);
+    height: var(--board-size);
+    display: grid;
+    grid-template-columns: repeat(11, 1fr);
+    grid-template-rows: repeat(11, 1fr);
+    background: var(--board-bg);
+    border: 6px solid var(--board-edge);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+    position: relative;
+    animation: board-in 300ms ease-out;
+}
+
+.board-center {
+    grid-column: 2 / span 9;
+    grid-row: 2 / span 9;
+    background: var(--board-center);
+    border: 3px solid var(--board-edge);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 18px 20px;
+    z-index: 2;
+}
+
+.game-status {
+    font-weight: 600;
+}
+
+.choice-title {
+    font-weight: 600;
+}
+
+.game-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 6px;
+}
+
+.game-choices button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.game-choices button:hover {
+    filter: brightness(1.1);
+}
+
+.board-tile {
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: #fff;
+    z-index: 1;
+}
+
+.tile-name {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.tile-players {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.player-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    outline: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.event-title {
+    font-weight: 600;
+    margin-top: 6px;
+}
+
+.event-list {
+    width: min(100%, 520px);
+    max-height: 30vh;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 12px;
+}
+
+@keyframes board-in {
+    from { transform: scale(0.98); opacity: 0.8; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+@media (max-width: 1100px) {
+    .game-shell {
+        flex-direction: column;
+        align-items: center;
+    }
+}

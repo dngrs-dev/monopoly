@@ -17,6 +17,19 @@ from engine.game import (
 )
 from engine.choices import Choice
 from engine.events import Event
+from engine.tiles import (
+    Tile,
+    OwnableTile,
+    StreetTile,
+    RailroadTile,
+    UtilityTile,
+    StartTile,
+    JailTile,
+    ChanceTile,
+    GoToJailTile,
+    NoneTile,
+    PayTile,
+)
 
 
 router = APIRouter(prefix="/games", tags=["games"])
@@ -43,6 +56,59 @@ def _serialize_dataclass(obj: Any) -> dict:
     data["type"] = obj.__class__.__name__
     return data
 
+def _serialize_tile(tile: Tile, position: int) -> dict:
+    data = {
+        "position": position,
+        "type": tile.__class__.__name__,
+        "name": tile.name,
+    }
+
+    if isinstance(tile, OwnableTile):
+        data.update(
+            {
+                "price": tile.price,
+                "owner": tile.owner,
+                "mortgaged": tile.mortgaged,
+            }
+        )
+
+    if isinstance(tile, StreetTile):
+        data.update(
+            {
+                "group_id": tile.group_id,
+                "improvement_level": tile.improvement_level,
+                "rent_schedule": tile.rent_schedule,
+            }
+        )
+
+    if isinstance(tile, RailroadTile):
+        data.update(
+            {
+                "group_id": tile.group_id,
+                "rent_schedule": tile.rent_schedule,
+            }
+        )
+
+    if isinstance(tile, UtilityTile):
+        data.update(
+            {
+                "group_id": tile.group_id,
+                "rent_multiplier": tile.rent_multiplier,
+            }
+        )
+
+    if isinstance(tile, StartTile):
+        data.update({"pass_bonus": tile.pass_bonus, "land_bonus": tile.land_bonus})
+
+    if isinstance(tile, JailTile):
+        data.update({"skip_turns": tile.skip_turns, "fine": tile.fine})
+
+    if isinstance(tile, PayTile):
+        data.update({"amount": tile.amount})
+
+    # ChanceTile / GoToJailTile / NoneTile: no extra fields needed
+
+    return data
 
 @dataclass
 class GameSession:
@@ -90,6 +156,12 @@ class GameSession:
             _serialize_dataclass(choice)
             for choice in self.available_choices
             if getattr(choice, "player_id", None) == player_id
+        ]
+        
+    def serialize_board(self) -> list[dict]:
+        return [
+            _serialize_tile(tile, index)
+            for index, tile in enumerate(self.game.board.tiles)
         ]
 
     def _find_matching_choice(self, player_id: int, payload: dict) -> Choice | None:

@@ -5,24 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Game</title>
     <link rel="stylesheet" href="/static/partials/general.css">
+    <link rel="stylesheet" href="/static/games/styles.css">
 </head>
 <body>
-    <div class="header"></div>
-
-    <div class="widther">
-        <h1 id="game-title">Game</h1>
-        <p id="game-status"></p>
-        <div id="game-players"></div>
-        <h3>Events</h3>
-        <div id="game-events"></div>
-        <h3>Choices</h3>
-        <div id="game-choices"></div>
-    </div>
-
-    <div class="footer"></div>
+    <main class="game-shell">
+        <section class="board-panel">
+            <div id="board" class="board">
+                <div id="board-center" class="board-center">
+                    <div id="game-status" class="game-status"></div>
+                    <div class="choice-title">Choices</div>
+                    <div id="game-choices" class="game-choices"></div>
+                    <div class="event-title">Events</div>
+                    <div id="game-events" class="event-list"></div>
+                </div>
+            </div>
+        </section>
+    </main>
 
     <script src="/static/games/script.js"></script>
-    <script src="/static/partials/header.js"></script>
-    <script src="/static/partials/footer.js"></script>
 </body>
 </html>

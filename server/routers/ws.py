@@ -49,6 +49,14 @@ async def _send_choices(lobby_id: str, session) -> None:
             except Exception:
                 pass
 
+BOARD_EVENT_TYPES = {
+    "PlayerBoughtProperty",
+    "PlayerBoughtImprovement",
+    "PlayerSoldProperty",
+    "PlayerSoldImprovement",
+    "PlayerMortgagedProperty",
+    "PlayerUnmortgagedProperty",
+}
 
 @router.websocket("/games/{lobby_id}")
 async def game_websocket(websocket: WebSocket, lobby_id: str):
@@ -75,6 +83,7 @@ async def game_websocket(websocket: WebSocket, lobby_id: str):
                 "player_id": session.user_to_player[user.id],
                 "state": session.serialize_state(),
                 "choices": session.serialize_choices_for_user(user.id),
+                "board": session.serialize_board(),
             }
         )
 
@@ -92,6 +101,15 @@ async def game_websocket(websocket: WebSocket, lobby_id: str):
                     "state": session.serialize_state(),
                 },
             )
+            
+            if any(e.__class__.__name__ in BOARD_EVENT_TYPES for e in events):
+                await game_hub.broadcast(
+                    lobby_id,
+                    {
+                        "type": "board",
+                        "board": session.serialize_board(),
+                    },
+                )
             await _send_choices(lobby_id, session)
 
     except WebSocketDisconnect:

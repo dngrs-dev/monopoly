@@ -1,26 +1,90 @@
 const lobbyId = window.location.pathname.split("/").pop();
 const statusEl = document.getElementById("game-status");
-const playersEl = document.getElementById("game-players");
 const eventsEl = document.getElementById("game-events");
 const choicesEl = document.getElementById("game-choices");
+const boardEl = document.getElementById("board");
 
 let myPlayerId = null;
 let lastState = null;
+let boardSnapshot = null;
+const tileMap = new Map();
+
+const playerColors = [
+    "#e6194b", "#3cb44b", "#ffe119", "#4363d8",
+    "#f58231", "#911eb4", "#46f0f0", "#f032e6",
+]
+
+function positionToGrid(pos) {
+    if (pos === 0) return { col: 10, row: 10 };
+    if (pos >= 1 && pos <= 9) return { col: 10 - pos, row: 10 };
+    if (pos === 10) return { col: 0, row: 10 };
+    if (pos >= 11 && pos <= 19) return { col: 0, row: 20 - pos };
+    if (pos === 20) return { col: 0, row: 0 };
+    if (pos >= 21 && pos <= 29) return { col: pos - 20, row: 0 };
+    if (pos === 30) return { col: 10, row: 0 };
+    return { col: 10, row: pos - 30 };
+}
+
+function formatName(name) {
+    return name.replace(/_/g, " ").toUpperCase();
+}
+
+function renderBoard(board) {
+    boardSnapshot = board;
+
+    document.querySelectorAll(".board-tile").forEach((el) => el.remove());
+    tileMap.clear();
+
+    boardSnapshot.forEach((tile) => {
+        const pos = tile.position;
+        const coords = positionToGrid(pos);
+
+        const tileEl = document.createElement("div");
+        tileEl.className = "board-tile";
+        tileEl.style.gridColumn = String(coords.col + 1);
+        tileEl.style.gridRow = String(coords.row + 1);
+        tileEl.dataset.position = String(pos);
+
+        const nameEl = document.createElement("div");
+        nameEl.className = "tile-name";
+        nameEl.textContent = formatName(tile.name);
+
+        const playersEl = document.createElement("div");
+        playersEl.className = "tile-players";
+
+        tileEl.append(nameEl, playersEl);
+        boardEl.appendChild(tileEl);
+        tileMap.set(pos, tileEl);
+    });
+
+    if (lastState) {
+        updatePlayers(lastState);
+    }
+}
+
+function updatePlayers(state) {
+    tileMap.forEach((tileEl) => {
+        const playersEl = tileEl.querySelector(".tile-players");
+        playersEl.textContent = "";
+    });
+
+    state.players.forEach((p) => {
+        const tileEl = tileMap.get(p.position);
+        if (!tileEl) return;
+
+        const dot = document.createElement("span");
+        dot.className = "player-dot";
+        dot.title = `P${p.id}`;
+        dot.style.backgroundColor = playerColors[p.id % playerColors.length];
+
+        tileEl.querySelector(".tile-players").appendChild(dot);
+    });
+}
 
 function renderState(state) {
     lastState = state;
     statusEl.textContent = `Turn: ${state.current_player_id} | Phase: ${state.turn_phase}`;
-
-    playersEl.textContent = "";
-    state.players.forEach((p) => {
-        const row = document.createElement("div");
-        row.textContent = `P${p.id} | $${p.balance} | pos ${p.position}` +
-            (p.in_jail ? " | in jail" : "") +
-            (p.bankrupt ? " | bankrupt" : "") +
-            (p.id === myPlayerId ? " | YOU" : "") +
-            (p.id === state.current_player_id ? " | CURRENT" : "");
-        playersEl.appendChild(row);
-    });
+    updatePlayers(state);
 }
 
 function renderEvents(events) {
@@ -29,6 +93,7 @@ function renderEvents(events) {
         row.textContent = `${e.type}: ${JSON.stringify(e)}`;
         eventsEl.appendChild(row);
     });
+    eventsEl.scrollTop = eventsEl.scrollHeight;
 }
 
 function choiceLabel(choice) {
@@ -57,6 +122,7 @@ ws.onmessage = (event) => {
 
     if (msg.type === "init") {
         myPlayerId = msg.player_id;
+        renderBoard(msg.board);
         renderState(msg.state);
         renderChoices(msg.choices);
     }
@@ -68,6 +134,10 @@ ws.onmessage = (event) => {
 
     if (msg.type === "choices") {
         renderChoices(msg.choices);
+    }
+
+    if (msg.type === "board") {
+        renderBoard(msg.board);
     }
 };
 
