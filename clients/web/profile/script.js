@@ -1,5 +1,6 @@
 const idElement = document.getElementById('id');
 const displayNameElement = document.getElementById('display-name');
+const avatarElement = document.getElementById('avatar');
 
 const privateProfileElement = document.querySelector("[class='private-profile']");
 const settingsButton = document.getElementById("settings");
@@ -18,6 +19,7 @@ async function loadProfile() {
         console.log(user);
         idElement.textContent = user.id;
         displayNameElement.textContent = user.display_name;
+        avatarElement.src = user.avatar_url;
         current_user = await loadCurrentUser();
         if (current_user && current_user.id === user.id) {
             privateProfileElement.hidden = false;
