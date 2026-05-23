@@ -28,3 +28,17 @@ form.addEventListener('submit', async (event) => {
 
     window.location.href = '/';
 });
+
+async function loadSession() {
+    const response = await fetch('/auth/session', {
+        method: 'GET',
+        credentials: 'include'
+    });
+
+    if (response.ok) {
+        window.location.href = '/';
+    }
+    return;
+}
+
+loadSession();
