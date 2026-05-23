@@ -25,9 +25,6 @@ from engine.tiles import (
     UtilityTile,
     StartTile,
     JailTile,
-    ChanceTile,
-    GoToJailTile,
-    NoneTile,
     PayTile,
 )
 
