@@ -10,23 +10,25 @@
 <body>
     <div class="header"></div>
     
-    <div class="lobbies">
-        <h1>Active lobbies</h1>
-        <button id="create-lobby">Create lobby</button>
-        <div id="lobby-list"></div>
-    </div>
+    <div class="widther">
+        <div class="lobbies">
+            <h1>Active lobbies</h1>
+            <button id="create-lobby">Create lobby</button>
+            <div id="lobby-list"></div>
+        </div>
 
-    <div id="create-lobby-modal" class="modal" hidden>
-        <div class="modal-content">
-            <h2>Create lobby</h2>
-            <label>
-                Max players
-                <input id="lobby-max-players" type="number" min="2" max="4" value="4">
-            </label>
+        <div id="create-lobby-modal" class="modal" hidden>
+            <div class="modal-content">
+                <h2>Create lobby</h2>
+                <label>
+                    Max players
+                    <input id="lobby-max-players" type="number" min="2" max="4" value="4">
+                </label>
 
-            <div class="modal-actions">
-                <button id="create-lobby-confirm">Create</button>
-                <button id="create-lobby-cancel">Cancel</button>
+                <div class="modal-actions">
+                    <button id="create-lobby-confirm">Create</button>
+                    <button id="create-lobby-cancel">Cancel</button>
+                </div>
             </div>
         </div>
     </div>
