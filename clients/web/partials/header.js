@@ -17,6 +17,7 @@ async function loadHeader() {
 
     initializeButtons();
     setupHeaderActions();
+    showReconnect();
 }
 
 async function setupHeaderActions() {
@@ -61,6 +62,32 @@ async function initializeButtons() {
             }
         }
     };
+}
+
+async function showReconnect() {
+    const reconnectEl = document.querySelector(".header-reconnect");
+    const reconnectButton = document.getElementById("header-reconnect-button");
+    
+    const response = await fetch("/games/me", {
+        method: "GET",
+        credentials: "include",
+    });
+
+    if (!response.ok) {
+        reconnectEl.hidden = true;
+        return;
+    }
+
+    const data = await response.json();
+    if (!data.active) {
+        reconnectEl.hidden = true;
+        return;
+    }
+
+    reconnectEl.hidden = false;
+    reconnectButton.onclick = () => {
+        window.location.href = `/games/${data.lobby_id}`;
+    }
 }
 
 document.addEventListener("DOMContentLoaded", loadHeader);

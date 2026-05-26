@@ -3,9 +3,11 @@ from dataclasses import asdict, dataclass, field, is_dataclass
 from enum import Enum
 from typing import Any
 
-from fastapi import APIRouter, WebSocket
+from fastapi import APIRouter, WebSocket, Depends
 from fastapi.responses import FileResponse
 from ..paths import WEB_ROOT
+from ..dependecies import User
+from ..jwt_utils import get_current_user
 
 from engine.game import (
     Game,
@@ -30,6 +32,21 @@ from engine.tiles import (
 
 
 router = APIRouter(prefix="/games", tags=["games"])
+
+
+@router.get("/me")
+async def my_game(current_user: User = Depends(get_current_user)):
+    session = await game_sessions.get_user_session(current_user.id)
+    if session is None:
+        return {"active": False, "error": "User is not in a game"}
+    
+    player_id = session.user_to_player[current_user.id]
+    player = session.game.get_player(player_id)
+    
+    if player.bankrupt:
+        return {"active": False, "error": "User is bankrupt"}
+    
+    return {"active": True, "lobby_id": session.lobby_id}
 
 @router.get("/{lobby_id}")
 async def game_page(lobby_id: str):
@@ -232,7 +249,13 @@ class GameSessions:
     async def remove(self, lobby_id: str) -> None:
         async with self._lock:
             self._sessions.pop(lobby_id, None)
-
+            
+    async def get_user_session(self, user_id: int) -> GameSession | None:
+        async with self._lock:
+            for session in self._sessions.values():
+                if user_id in session.user_to_player:
+                    return session
+            return None
 
 class GameHub:
     def __init__(self) -> None:
