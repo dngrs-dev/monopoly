@@ -16,6 +16,35 @@ function appendEvents(newEvents) {
     events.push(...newEvents);
 }
 
+function closeAllMenus(exceptCard = null) {
+    document.querySelectorAll('.table-body-players-card.menu-open').forEach((card) => {
+        if (card === exceptCard) return;
+        card.classList.remove('menu-open');
+    });
+}
+
+playersElement.addEventListener('click', (event) => {
+    if (event.target.closest('.table-body-players-card-menu')) {
+        // Clicked inside menu, do nothing
+        return;
+    }
+
+    const card = event.target.closest('.table-body-players-card');
+    if (!card) return;
+
+    const wasOpen = card.classList.contains('menu-open');
+    closeAllMenus();
+    if (!wasOpen) {
+        card.classList.add('menu-open');
+    }
+});
+
+document.addEventListener('click', (event) => {
+    if (!event.target.closest('.table-body-players-card')) {
+        closeAllMenus();
+    }
+});
+
 function renderPlayers() {
     if (!state.gameState || !state.gameState.players) return;
 

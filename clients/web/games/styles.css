@@ -52,7 +52,6 @@ body {
 
 .table-body-players-card-body {
     padding: 10px;
-    width: 100%;
     height: 100%;
     background: #161a1b;
     cursor: pointer;
@@ -77,6 +76,28 @@ body {
     justify-content: center;
     margin-top: 2px;
     height: 20px;
+}
+
+.table-body-players-card-menu {
+    display: none;
+    position: absolute;
+    left: 0;
+    top: 101%;
+    width: 100%;
+    background: #161a1b;
+    padding: 10px;
+    box-sizing: border-box;
+    z-index: 5;
+}
+
+.table-body-players-card.menu-open .table-body-players-card-menu {
+    display: block;
+}
+
+.table-body-players-card-menu > div {
+    padding: 2px;
+    cursor: pointer;
+    transition: 0.1s ease-in-out;
 }
 
 .table-body-board {
