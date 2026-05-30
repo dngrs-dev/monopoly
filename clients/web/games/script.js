@@ -13,6 +13,125 @@ const state = {
 }
 const events = [];
 
+const TILE_LABELS = {
+    go: 'GO',
+    mediterranean_avenue: 'Mediterranean Ave',
+    baltic_avenue: 'Baltic Ave',
+    income_tax: 'Income Tax',
+    chance: 'Chance',
+    community_chest: 'Community Chest',
+    jail: 'Jail',
+    free_parking: 'Free Parking',
+    go_to_jail: 'Go To Jail',
+    luxury_tax: 'Luxury Tax',
+};
+
+function titleFromKey(key) {
+    return key.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+function labelForTile(tile) {
+    if (!tile || !tile.name) return 'Unknown';
+    return TILE_LABELS[tile.name] || titleFromKey(tile.name);
+}
+
+function getLayout(count) {
+    if (count % 4 === 0) {
+        const side = count / 4 + 1;
+        return {width: side, height: side};
+    }
+
+    if (count % 2 === 0) {
+        const sum = count / 2 + 2;
+        const height = Math.max(2, Math.floor(sum / 3));
+        const width = sum - height;
+        return {width, height};
+    }
+
+    return {width: count, height: 1};
+}
+
+function buildPositions(width, height) {
+    const positions = [];
+
+    // Top row
+    for (let c = 0; c < width; c++) {
+        positions.push({r: 0, c});
+    }
+
+    // Right column
+    for (let r = 1; r < height - 1; r++) {
+        positions.push({r, c: width - 1});
+    }
+
+    // Bottom row
+    if (height > 1) {
+        for (let c = width - 1; c >= 0; c--) {
+            positions.push({r: height - 1, c});
+        }
+    }
+
+    // Left column
+    if (width > 1) {
+        for (let r = height - 2; r > 0; r--) {
+            positions.push({r, c: 0});
+        }
+    }
+
+    return positions;
+}
+
+function createBoardTile(tile) {
+    const el = document.createElement('div');
+    el.className = 'table-body-board-tile';
+
+    const title = document.createElement('div');
+    title.className = 'table-body-board-tile-title';
+    title.textContent = labelForTile(tile);
+
+    el.appendChild(title);
+
+    if (typeof tile.price === 'number') {
+        const price = document.createElement('div');
+        price.className = 'table-body-board-tile-price';
+        price.textContent = `${tile.price} $`;
+        el.appendChild(price);
+    }
+
+    return el;
+}
+
+function renderBoard() {
+    if (!state.board || state.board.length === 0) return;
+
+    const count = state.board.length;
+    const layout = getLayout(count);
+
+    boardElement.innerHTML = '';
+    boardElement.style.display = 'grid';
+    boardElement.style.gridTemplateColumns = `repeat(${layout.width}, 1fr)`;
+    boardElement.style.gridTemplateRows = `repeat(${layout.height}, 1fr)`;
+
+    if (layout.height === 1) {
+        state.board.forEach((tile, index) => {
+            const el = createBoardTile(tile);
+            el.style.gridColumn = index + 1;
+            el.style.gridRow = 1;
+            boardElement.appendChild(el);
+        });
+        return;
+    }
+
+    const positions = buildPositions(layout.width, layout.height);
+    for (let i = 0; i < count; i++) {
+        const pos = positions[i];
+        const el = createBoardTile(state.board[i]);
+        el.style.gridColumn = pos.c + 1;
+        el.style.gridRow = pos.r + 1;
+        boardElement.appendChild(el);
+    }
+}
+
 function getPlayerColor(playerId) {
     const colors = ['#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6'];
     return colors[playerId % colors.length];
@@ -172,20 +291,6 @@ function parseLobbyId() {
 
 function renderChoices() {
 
-}
-
-function renderBoard() {
-    if (!state.board) return;
-
-    boardElement.innerHTML = '';
-
-    state.board.forEach((cell) => {
-        console.log('Rendering board cell:', cell);
-        const cellElement = document.createElement('div');
-        cellElement.className = 'table-body-board-cell';
-
-        boardElement.append(cellElement);
-    });
 }
 
 function renderAll() {
