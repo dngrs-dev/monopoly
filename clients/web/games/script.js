@@ -1,4 +1,5 @@
 const playersElement = document.querySelector('.table-body-players');
+const boardElement = document.querySelector('.table-body-board');
 
 const state = {
     lobbyId: null,
@@ -174,11 +175,22 @@ function renderChoices() {
 }
 
 function renderBoard() {
+    if (!state.board) return;
 
+    boardElement.innerHTML = '';
+
+    state.board.forEach((cell) => {
+        console.log('Rendering board cell:', cell);
+        const cellElement = document.createElement('div');
+        cellElement.className = 'table-body-board-cell';
+
+        boardElement.append(cellElement);
+    });
 }
 
 function renderAll() {
     renderPlayers();
+    renderBoard();
 }
 
 function connectWebSocket() {

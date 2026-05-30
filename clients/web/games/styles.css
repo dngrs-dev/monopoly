@@ -22,17 +22,19 @@ body {
     background: #262626;
 }
 
-.table {
-    position: relative;
-    flex: 0 0 auto;
-    transform-origin: center;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    user-select: none;
+
+.table-body {
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 10px;
 }
 
 .table-body-players {
-    flex: 0 0 auto;
+    padding: 10px;
+    flex: 1 1 auto;
     position: relative;
     padding-left: 10px;
     z-index: 1;
@@ -101,11 +103,19 @@ body {
 }
 
 .table-body-board {
+    flex: 0 0 auto;
     min-width: 400px;
     min-height: 400px;
-    flex: 0 0 auto;
     position: relative;
     margin-left: 10px;
     height: 100%;
     z-index: 0;
+}
+
+.table-body-board-cell {
+    position: flex;
+    width: 60px;
+    height: 60px;
+    background: #161a1b;
+    border: 1px solid #fff;
 }
