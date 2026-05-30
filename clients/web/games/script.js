@@ -12,6 +12,11 @@ const state = {
 }
 const events = [];
 
+function getPlayerColor(playerId) {
+    const colors = ['#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6'];
+    return colors[playerId % colors.length];
+}
+
 function appendEvents(newEvents) {
     events.push(...newEvents);
 }
@@ -74,10 +79,7 @@ function renderPlayers() {
         name.className = 'table-body-players-card-body-name';
         const _status = document.createElement('div');
         _status.className = '_status';
-        if (player.id === state.gameState.current_player_id) {
-            // TODO: Add timer logic + styling
-            _status.textContent = 'Turn';
-        }
+        
         const _name = document.createElement('div');
         _name.className = '_name';
         _name.textContent = meta.display_name || `Player ${player.id}`;
@@ -98,9 +100,6 @@ function renderPlayers() {
         // Timer
         const timer = document.createElement('div');
         timer.className = 'table-body-players-card-body-timer';
-        if (player.id === state.gameState.current_player_id) {
-            // TODO: Add timer logic + styling
-        }
 
         body.append(avatar, name, money, timer);
 
@@ -111,11 +110,22 @@ function renderPlayers() {
         const _profile = document.createElement('div');
         _profile.className = '_profile';
         _profile.textContent = 'Profile';
+        _profile.addEventListener('click', () => {
+            const newWindow = window.open(`/profile/${meta.profile_link}`, '_blank', 'noopener,noreferrer');
+            if (newWindow) newWindow.opener = null;
+        });
 
         // Only for self user
         const _leave = document.createElement('div');
         _leave.className = '_leave';
         _leave.textContent = 'Leave';
+        _leave.addEventListener('click', () => {
+            // TODO: Add confirmation modal and also make the player bankrupt instead of just leaving the game
+            if (confirm('Are you sure you want to leave the game?')) {
+                state.ws.close();
+                window.location.href = '/lobbies';
+            }
+        });
 
         // Only for other users
         const _contract = document.createElement('div');
@@ -136,6 +146,13 @@ function renderPlayers() {
             menu.append(_leave);
         } else {
             menu.append(_contract, _ignore, _report);
+        }
+
+        // Current player logic
+        if (player.id === state.gameState.current_player_id) {
+            // TODO: Add timer logic + styling + status
+            _status.textContent = 'Turn';
+            body.style.backgroundColor = getPlayerColor(player.id) + '33'; // CHANGE TO THE BORDER
         }
 
         card.append(body, menu);
