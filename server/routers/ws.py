@@ -1,9 +1,8 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
-from sqlalchemy import select
 
 from server.routers.games import game_sessions, game_hub
-from ..dependecies import SessionLocal, User, DEFAULT_AVATAR_URL
+from ..dependecies import SessionLocal
 from ..jwt_utils import JWT_COOKIE_NAME, get_user_from_cookie
 from .lobbies import manager, hub, build_lobby_payloads
 
