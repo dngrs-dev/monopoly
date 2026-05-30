@@ -1,8 +1,9 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from server.routers.games import game_sessions, game_hub
-from ..dependecies import SessionLocal
+from ..dependecies import SessionLocal, User, DEFAULT_AVATAR_URL
 from ..jwt_utils import JWT_COOKIE_NAME, get_user_from_cookie
 from .lobbies import manager, hub, build_lobby_payloads
 
@@ -84,6 +85,7 @@ async def game_websocket(websocket: WebSocket, lobby_id: str):
                 "state": session.serialize_state(),
                 "choices": session.serialize_choices_for_user(user.id),
                 "board": session.serialize_board(),
+                "player_meta": session.build_player_meta(db=db),
             }
         )
 

@@ -2,11 +2,13 @@ import asyncio
 from dataclasses import asdict, dataclass, field, is_dataclass
 from enum import Enum
 from typing import Any
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, WebSocket, Depends
 from fastapi.responses import FileResponse
 from ..paths import WEB_ROOT
-from ..dependecies import User
+from ..dependecies import User, DEFAULT_AVATAR_URL
 from ..jwt_utils import get_current_user
 
 from engine.game import (
@@ -177,6 +179,24 @@ class GameSession:
             _serialize_tile(tile, index)
             for index, tile in enumerate(self.game.board.tiles)
         ]
+        
+    def build_player_meta(self, db: Session):
+        user_ids = list(self.user_to_player.keys())
+        users = db.scalars(select(User).where(User.id.in_(user_ids))).all()
+        user_map = {user.id: user for user in users}
+        
+        player_meta: dict[int, dict] = {}
+        for user_id, player_id in self.user_to_player.items():
+            user = user_map.get(user_id)
+            if not user:
+                continue
+            player_meta[player_id] = {
+                "id": user.id,
+                "display_name": user.display_name,
+                "avatar_url": user.avatar_url or DEFAULT_AVATAR_URL,
+                "profile_link": user.profile_link,
+            }
+        return player_meta
 
     def _find_matching_choice(self, player_id: int, payload: dict) -> Choice | None:
         for choice in self.available_choices:

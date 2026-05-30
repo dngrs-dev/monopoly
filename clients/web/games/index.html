@@ -1,26 +1,40 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game</title>
-    <link rel="stylesheet" href="/static/partials/general.css">
-    <link rel="stylesheet" href="/static/games/styles.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monopoly Live</title>
+    <link rel="stylesheet" href="/static/games/styles.css" />
 </head>
 <body>
-    <main class="game-shell">
-        <section class="board-panel">
-            <div id="board" class="board">
-                <div id="board-center" class="board-center">
-                    <div id="game-status" class="game-status"></div>
-                    <div class="choice-title">Choices</div>
-                    <div id="game-choices" class="game-choices"></div>
-                    <div class="event-title">Events</div>
-                    <div id="game-events" class="event-list"></div>
+    <div class="wrapper">
+        <div class="table-body">
+            <div class="table-body-players">
+                <div class="table-body-players-card">
+                    <div class="table-body-players-card-body">
+                        <img class="table-body-players-card-body-avatar" src="/avatars" alt="Avatar">
+                        <div class="table-body-players-card-body-name">
+                            <div class="_status" style="display: none"></div>
+                            <div class="_name">Player name</div>
+                            <div class="_muted" style="display: none"></div>
+                            <div class="_ignore" style="display: none"></div>
+                        </div>
+                        <div class="table-body-players-card-body-money">00000</div>
+                        <div class="table-body-players-card-body-timer">60</div>
+                    </div>
+                    <div class="table-body-players-card-menu">
+                        <div class="_contract"></div>
+                        <div class="_profile"></div>
+                        <div class="_leave"></div>
+                        <div class="_ignore"></div>
+                        <div class="_report"></div>
+                    </div>
                 </div>
             </div>
-        </section>
-    </main>
+            <div class="table-body-board">
+            </div>
+        </div>
+    </div>
 
     <script src="/static/games/script.js"></script>
 </body>

@@ -1,148 +1,133 @@
-const lobbyId = window.location.pathname.split("/").pop();
-const statusEl = document.getElementById("game-status");
-const eventsEl = document.getElementById("game-events");
-const choicesEl = document.getElementById("game-choices");
-const boardEl = document.getElementById("board");
+const playersElement = document.querySelector('.table-body-players');
 
-let myPlayerId = null;
-let lastState = null;
-let boardSnapshot = null;
-const tileMap = new Map();
+const state = {
+    lobbyId: null,
+    ws: null,
+    playerId: null,
+    gameState: null,
+    board: [],
+    choices: [],
+    connected: false,
+    playerMeta: {},
+}
+const events = [];
 
-const playerColors = [
-    "#e6194b", "#3cb44b", "#ffe119", "#4363d8",
-    "#f58231", "#911eb4", "#46f0f0", "#f032e6",
-]
-
-function positionToGrid(pos) {
-    if (pos === 0) return { col: 10, row: 10 };
-    if (pos >= 1 && pos <= 9) return { col: 10 - pos, row: 10 };
-    if (pos === 10) return { col: 0, row: 10 };
-    if (pos >= 11 && pos <= 19) return { col: 0, row: 20 - pos };
-    if (pos === 20) return { col: 0, row: 0 };
-    if (pos >= 21 && pos <= 29) return { col: pos - 20, row: 0 };
-    if (pos === 30) return { col: 10, row: 0 };
-    return { col: 10, row: pos - 30 };
+function appendEvents(newEvents) {
+    events.push(...newEvents);
 }
 
-function formatName(name) {
-    return name.replace(/_/g, " ").toUpperCase();
-}
+function renderPlayers() {
+    if (!state.gameState || !state.gameState.players) return;
 
-function renderBoard(board) {
-    boardSnapshot = board;
+    playersElement.innerHTML = '';
 
-    document.querySelectorAll(".board-tile").forEach((el) => el.remove());
-    tileMap.clear();
+    state.gameState.players.forEach((player) => {
+        const card = document.createElement('div');
+        card.className = 'table-body-players-card';
+        card.classList.add(player.id === state.playerId ? 'self' : 'other');
+        card.classList.add(player.id === state.gameState.current_player_id ? 'active' : 'inactive');
 
-    boardSnapshot.forEach((tile) => {
-        const pos = tile.position;
-        const coords = positionToGrid(pos);
+        const body = document.createElement('div');
+        body.className = 'table-body-players-card-body';
 
-        const tileEl = document.createElement("div");
-        tileEl.className = "board-tile";
-        tileEl.style.gridColumn = String(coords.col + 1);
-        tileEl.style.gridRow = String(coords.row + 1);
-        tileEl.dataset.position = String(pos);
+        const meta = state.playerMeta[player.id] || {};
+        console.log('Meta for player', player.id, meta);
 
-        const nameEl = document.createElement("div");
-        nameEl.className = "tile-name";
-        nameEl.textContent = formatName(tile.name);
+        const avatar = document.createElement('img');
+        avatar.className = 'table-body-players-card-body-avatar';
+        avatar.src = meta.avatar_url || '/avatars';
+        avatar.alt = meta.display_name || 'Avatar';
 
-        const playersEl = document.createElement("div");
-        playersEl.className = "tile-players";
+        const name = document.createElement('div');
+        name.className = 'table-body-players-card-body-name';
+        name.textContent = meta.display_name || `Player ${player.id}`;
 
-        tileEl.append(nameEl, playersEl);
-        boardEl.appendChild(tileEl);
-        tileMap.set(pos, tileEl);
-    });
+        body.append(avatar, name);
 
-    if (lastState) {
-        updatePlayers(lastState);
-    }
-}
+        const menu = document.createElement('div');
+        menu.className = 'table-body-players-card-menu';
 
-function updatePlayers(state) {
-    tileMap.forEach((tileEl) => {
-        const playersEl = tileEl.querySelector(".tile-players");
-        playersEl.textContent = "";
-    });
-
-    state.players.forEach((p) => {
-        const tileEl = tileMap.get(p.position);
-        if (!tileEl) return;
-
-        const dot = document.createElement("span");
-        dot.className = "player-dot";
-        dot.title = `P${p.id}`;
-        dot.style.backgroundColor = playerColors[p.id % playerColors.length];
-
-        tileEl.querySelector(".tile-players").appendChild(dot);
+        card.append(body, menu);
+        playersElement.appendChild(card);
     });
 }
 
-function renderState(state) {
-    lastState = state;
-    statusEl.textContent = `Turn: ${state.current_player_id} | Phase: ${state.turn_phase}`;
-    updatePlayers(state);
+function setConnectionStatus(connected) {
+    state.connected = connected;
 }
 
-function renderEvents(events) {
-    events.forEach((e) => {
-        const row = document.createElement("div");
-        row.textContent = `${e.type}: ${JSON.stringify(e)}`;
-        eventsEl.appendChild(row);
-    });
-    eventsEl.scrollTop = eventsEl.scrollHeight;
+function parseLobbyId() {
+    const segments = window.location.pathname.split('/').filter(Boolean);
+    return segments[segments.length - 1] || null;
 }
 
-function choiceLabel(choice) {
-    const entries = Object.entries(choice).filter(([k]) => k !== "type");
-    const short = entries.slice(0, 2).map(([k, v]) => `${k}=${v}`).join(", ");
-    return `${choice.type}${short ? " (" + short + ")" : ""}`;
+function renderChoices() {
+
 }
 
-function renderChoices(choices) {
-    choicesEl.textContent = "";
-    choices.forEach((choice) => {
-        const btn = document.createElement("button");
-        btn.textContent = choiceLabel(choice);
-        btn.addEventListener("click", () => {
-            ws.send(JSON.stringify({ type: "choice", choice }));
-        });
-        choicesEl.appendChild(btn);
-    });
+function renderBoard() {
+
 }
 
-const wsProto = location.protocol === "https:" ? "wss" : "ws";
-const ws = new WebSocket(`${wsProto}://${location.host}/ws/games/${lobbyId}`);
+function renderAll() {
+    renderPlayers();
+}
 
-ws.onmessage = (event) => {
-    const msg = JSON.parse(event.data);
-
-    if (msg.type === "init") {
-        myPlayerId = msg.player_id;
-        renderBoard(msg.board);
-        renderState(msg.state);
-        renderChoices(msg.choices);
+function connectWebSocket() {
+    if (!state.lobbyId) return;
+    if (state.ws) {
+        state.ws.close();
     }
 
-    if (msg.type === "state") {
-        renderEvents(msg.events || []);
-        renderState(msg.state);
-    }
+    const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
+    state.ws = new WebSocket(`${wsProtocol}://${location.host}/ws/games/${state.lobbyId}`);
 
-    if (msg.type === "choices") {
-        renderChoices(msg.choices);
-    }
+    state.ws.onopen = () => setConnectionStatus(true);
 
-    if (msg.type === "board") {
-        renderBoard(msg.board);
-    }
-};
+    state.ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
 
-ws.onclose = (event) => {
-    if (event.code === 1008) {
-        window.location.href = "/login";
-    }
-};
+        if (msg.type === 'init') {
+            console.log('Received init message:', msg);
+            state.playerId = msg.player_id;
+            state.gameState = msg.state;
+            state.board = msg.board;
+            state.choices = msg.choices || [];
+            state.playerMeta = msg.player_meta || {};
+            setConnectionStatus(true);
+            renderAll();
+            return;
+        }
+
+        if (msg.type === 'state') {
+            state.gameState = msg.state;
+            appendEvents(msg.events || []);
+            renderAll();
+        }
+
+        if (msg.type === 'board') {
+            state.board = msg.board;
+            renderBoard();
+        }
+
+        if (msg.type === 'choices') {
+            state.choices = msg.choices || [];
+            renderChoices();
+        }
+    };
+
+    state.ws.onclose = (event) => {
+        setConnectionStatus(false);
+        if (event.code === 1008) {
+            window.location.href = '/login';
+        }
+    };
+}
+
+
+function init() {
+    state.lobbyId = parseLobbyId();
+    connectWebSocket();
+}
+
+init();
