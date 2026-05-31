@@ -80,14 +80,14 @@ function renderAll() {
             row.append(joinButton);
         }
 
-        if (userInLobby && !isHost) {
+        if (userInLobby && !isHost && !lobby.started) {
             const leaveButton = document.createElement("button");
             leaveButton.textContent = "Leave";
             leaveButton.addEventListener("click", () => leaveLobby());
             row.append(leaveButton);
         }
 
-        if (isHost) {
+        if (isHost && !lobby.started) {
             const startButton = document.createElement("button");
             startButton.textContent = "Start";
             startButton.addEventListener("click", () => startGame(lobby.lobby_id));
@@ -97,6 +97,15 @@ function renderAll() {
             deleteButton.textContent = "Delete";
             deleteButton.addEventListener("click", () => deleteLobby());
             row.append(deleteButton);
+        }
+
+        if (lobby.started) {
+            const spectateButton = document.createElement("button");
+            spectateButton.textContent = "Spectate";
+            spectateButton.addEventListener("click", () => {
+                window.location.href = `/games/${lobby.lobby_id}`;
+            });
+            row.append(spectateButton);
         }
 
         lobbyList.appendChild(row);
@@ -266,6 +275,7 @@ function connectWebSocket() {
             if (lobby.players.some((p) => p.id === currentUserId)) {
                 currentLobbyId = lobby.lobby_id;
                 window.location.href = `/games/${lobby.lobby_id}`;
+                ws.close();
             }
 
             renderAll();
