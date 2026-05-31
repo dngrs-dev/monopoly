@@ -1,5 +1,6 @@
 const playersElement = document.querySelector('.table-body-players');
 const boardElement = document.querySelector('.table-body-board');
+const statusElement = document.getElementById('connection-status');
 
 const state = {
     lobbyId: null,
@@ -282,6 +283,13 @@ function renderPlayers() {
 
 function setConnectionStatus(connected) {
     state.connected = connected;
+    if (connected) {
+        statusElement.hidden = true;
+        statusElement.textContent = 'Connected successfully!';
+    } else {
+        statusElement.hidden = false;
+        statusElement.textContent = 'Connection lost. Please refresh the page.';
+    }
 }
 
 function parseLobbyId() {
@@ -345,6 +353,8 @@ function connectWebSocket() {
         setConnectionStatus(false);
         if (event.code === 1008) {
             window.location.href = '/login';
+        } else {
+            window.location.href = '/browse';
         }
     };
 }
