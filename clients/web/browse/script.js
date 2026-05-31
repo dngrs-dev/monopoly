@@ -99,13 +99,22 @@ function renderAll() {
             row.append(deleteButton);
         }
 
-        if (lobby.started) {
+        if (lobby.started && !userInLobby) {
             const spectateButton = document.createElement("button");
             spectateButton.textContent = "Spectate";
             spectateButton.addEventListener("click", () => {
                 window.location.href = `/games/${lobby.lobby_id}`;
             });
             row.append(spectateButton);
+        }
+
+        if (lobby.started && userInLobby) {
+            const reconnectButton = document.createElement("button");
+            reconnectButton.textContent = "Reconnect";
+            reconnectButton.addEventListener("click", () => {
+                window.location.href = `/games/${lobby.lobby_id}`;
+            });
+            row.append(reconnectButton);
         }
 
         lobbyList.appendChild(row);
