@@ -1,6 +1,8 @@
 const playersElement = document.querySelector('.table-body-players');
 const boardElement = document.querySelector('.table-body-board');
+const boardOuterElement = document.querySelector('.table-body-board-outer');
 const statusElement = document.getElementById('connection-status');
+const boardInnerElement = document.querySelector('.table-body-board-inner');
 
 const state = {
     lobbyId: null,
@@ -108,17 +110,17 @@ function renderBoard() {
     const count = state.board.length;
     const layout = getLayout(count);
 
-    boardElement.innerHTML = '';
-    boardElement.style.display = 'grid';
-    boardElement.style.gridTemplateColumns = `repeat(${layout.width}, 1fr)`;
-    boardElement.style.gridTemplateRows = `repeat(${layout.height}, 1fr)`;
+    boardOuterElement.innerHTML = '';
+    boardOuterElement.style.display = 'grid';
+    boardOuterElement.style.gridTemplateColumns = `repeat(${layout.width}, 1fr)`;
+    boardOuterElement.style.gridTemplateRows = `repeat(${layout.height}, 1fr)`;
 
     if (layout.height === 1) {
         state.board.forEach((tile, index) => {
             const el = createBoardTile(tile);
             el.style.gridColumn = index + 1;
             el.style.gridRow = 1;
-            boardElement.appendChild(el);
+            boardOuterElement.appendChild(el);
         });
         return;
     }
@@ -129,7 +131,7 @@ function renderBoard() {
         const el = createBoardTile(state.board[i]);
         el.style.gridColumn = pos.c + 1;
         el.style.gridRow = pos.r + 1;
-        boardElement.appendChild(el);
+        boardOuterElement.appendChild(el);
     }
 }
 
@@ -298,12 +300,29 @@ function parseLobbyId() {
 }
 
 function renderChoices() {
+    if (!state.choices) return;
+    const choicesContainer = document.createElement('div');
+    choicesContainer.className = 'choices-container';
 
+    state.choices.forEach((choice) => {
+        const button = document.createElement('button');
+        button.className = 'choice-button';
+        button.textContent = choice.type;
+        button.addEventListener('click', () => {
+            console.log('Selected choice:', choice);
+            // state.ws.send(JSON.stringify({type: 'choice', choice_id: choice.id}));
+        });
+        choicesContainer.appendChild(button);
+    });
+
+    boardInnerElement.querySelector('.choices-container')?.remove();
+    boardInnerElement.appendChild(choicesContainer);
 }
 
 function renderAll() {
     renderPlayers();
     renderBoard();
+    renderChoices();
 }
 
 function connectWebSocket() {
