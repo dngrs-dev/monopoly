@@ -3,7 +3,7 @@ from engine.game import Game, start_game, end_turn, TurnPhase, apply_command
 from engine.choices import UseGetOutOfJailFreeCardChoice
 from engine.tiles import OwnableTile
 
-from demo.game import build_demo_game
+from engine.demo.game import build_demo_game
 
 
 def print_list(title: str, items: list[object]) -> None:
