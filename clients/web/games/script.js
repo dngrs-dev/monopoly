@@ -1,8 +1,6 @@
 const playersElement = document.querySelector('.table-body-players');
 const boardElement = document.querySelector('.table-body-board');
-const boardOuterElement = document.querySelector('.table-body-board-outer');
 const statusElement = document.getElementById('connection-status');
-const boardInnerElement = document.querySelector('.table-body-board-inner');
 
 const state = {
     lobbyId: null,
@@ -110,17 +108,19 @@ function renderBoard() {
     const count = state.board.length;
     const layout = getLayout(count);
 
-    boardOuterElement.innerHTML = '';
-    boardOuterElement.style.display = 'grid';
-    boardOuterElement.style.gridTemplateColumns = `repeat(${layout.width}, 1fr)`;
-    boardOuterElement.style.gridTemplateRows = `repeat(${layout.height}, 1fr)`;
+    boardElement
+    .querySelectorAll(':scope > .table-body-board-tile')
+    .forEach((tile) => tile.remove());
+
+    boardElement.style.gridTemplateColumns = `repeat(${layout.width}, 1fr)`;
+    boardElement.style.gridTemplateRows = `repeat(${layout.height}, 1fr)`;
 
     if (layout.height === 1) {
         state.board.forEach((tile, index) => {
             const el = createBoardTile(tile);
             el.style.gridColumn = index + 1;
             el.style.gridRow = 1;
-            boardOuterElement.appendChild(el);
+            boardElement.appendChild(el);
         });
         return;
     }
@@ -131,7 +131,7 @@ function renderBoard() {
         const el = createBoardTile(state.board[i]);
         el.style.gridColumn = pos.c + 1;
         el.style.gridRow = pos.r + 1;
-        boardOuterElement.appendChild(el);
+        boardElement.appendChild(el);
     }
 }
 
@@ -314,8 +314,8 @@ function renderChoices() {
         choicesContainer.appendChild(button);
     });
 
-    boardInnerElement.querySelector('.choices-container')?.remove();
-    boardInnerElement.appendChild(choicesContainer);
+    boardElement.querySelector('.choices-container')?.remove();
+    boardElement.appendChild(choicesContainer);
 }
 
 function renderAll() {
