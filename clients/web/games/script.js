@@ -309,8 +309,7 @@ function renderChoices() {
         button.className = 'choice-button';
         button.textContent = choice.type;
         button.addEventListener('click', () => {
-            console.log('Selected choice:', choice);
-            // state.ws.send(JSON.stringify({type: 'choice', choice_id: choice.id}));
+            state.ws.send(JSON.stringify({ type: 'choice', choice }));
         });
         choicesContainer.appendChild(button);
     });
