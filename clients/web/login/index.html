@@ -6,19 +6,38 @@
     <title>Login</title>
     <link rel="stylesheet" href="/static/partials/general.css">
     <link rel="stylesheet" href="/static/login/styles.css">
+    <script src="/static/partials/session.js"></script>
 </head>
 <body>
     <div class="header"></div>
 
     <div class="widther">
         <div class="login-container">
-            <h1>Login to Monopoly</h1>
+            <h1>Login</h1>
             <form id="login-form">
-                <input type="text" name="email" placeholder="example@test.com" required>
+                <input type="email" name="email" placeholder="example@gmail.com" required>
                 <input type="password" name="password" placeholder="12345678" required>
                 <button type="submit">Login</button>
             </form>
             <p id="login-error" class="error" hidden></p>
+        </div>
+        <div class="signup-toggle-container">
+            <h1>Don't have an account?</h1>
+            <button id="toggle-signup">Signup</button>
+        </div>
+        <div class="signup-container" hidden>
+            <h1>Signup</h1>
+            <form id="signup-form">
+                <input type="email" name="email" placeholder="example@gmail.com" required>
+                <input type="password" name="password" placeholder="12345678" required>
+                <input type="password" name="confirmPassword" placeholder="Confirm Password" required>
+                <button type="submit">Signup</button>
+            </form>
+            <p id="signup-error" class="error" hidden></p>
+        </div>
+        <div class="login-toggle-container" hidden>
+            <h1>Already have an account?</h1>
+            <button id="toggle-login">Login</button>
         </div>
     </div>
 
