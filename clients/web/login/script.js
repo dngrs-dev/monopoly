@@ -12,7 +12,7 @@ async function loadSession() {
     const session = await window.monopolySession;
 
     if (session) {
-        console.log(session);
+        window.location.assign("/profile/"+session.profile_link);
     }
 }
 
@@ -61,7 +61,9 @@ loginForm.addEventListener("submit", async (event) => {
             throw new Error(message || "Login failed. Check your details and try again.");
         }
 
-        window.location.assign("/");
+        // If login is successful, redirect to the profile page
+        // TODO: Redirect to the profile page, not reload the page.
+        window.location.reload();
     } catch (error) {
         loginError.textContent = error.message || "Could not connect. Please try again.";
         loginError.hidden = false;
@@ -108,8 +110,9 @@ signupForm.addEventListener("submit", async (event) => {
                 : detail;
             throw new Error(message || "Could not create your account. Please try again.");
         }
-
-        window.location.assign("/");
+        // If signup is successful, redirect to the profile page
+        // TODO: Redirect to the profile page, not reload the page.
+        window.location.reload();
     } catch (error) {
         signupError.textContent = error.message || "Could not connect. Please try again.";
         signupError.hidden = false;
