@@ -40,9 +40,12 @@ async function setupHeaderActions() {
 }
 
 async function initializeButtons() {
+    const logoButton = document.querySelector(".header-logo");
     const loginButton = document.getElementById("header-login-button");
     const profileButton = document.getElementById("header-profile-button");
     const logoutButton = document.getElementById("header-logout-button");
+
+    if (logoButton) logoButton.onclick = () => (window.location.href = "/");
 
     if (loginButton) loginButton.onclick = () => (window.location.href = "/login");
     if (profileButton) profileButton.onclick = () => (window.location.href = "/profile");
@@ -86,6 +89,11 @@ async function showReconnect() {
     reconnectButton.onclick = () => {
         window.location.href = `/games/${data.lobby_id}`;
     }
+}
+
+async function refreshHeader() {
+    await setupHeaderActions();
+    await showReconnect();
 }
 
 document.addEventListener("DOMContentLoaded", loadHeader);
