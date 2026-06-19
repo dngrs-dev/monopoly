@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .dependecies import init_db
-from .routers import main, auth, login, signup, profile, ws, settings, avatars, lobbies, browse, games
+from .routers import main, auth, login, profile, ws, settings, avatars, lobbies, browse, games
 from .paths import WEB_ROOT, AVATARS_DIR, ASSETS_DIR
 
 load_dotenv()
@@ -15,7 +15,6 @@ app.mount("/static", StaticFiles(directory=str(WEB_ROOT), html=True), name="web"
 app.include_router(main.router)
 app.include_router(auth.router)
 app.include_router(login.router)
-app.include_router(signup.router)
 app.include_router(profile.router)
 app.include_router(ws.router)
 app.include_router(settings.router)
