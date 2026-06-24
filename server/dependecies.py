@@ -52,6 +52,7 @@ class MultiplierCard(Base):
     available_shop: Mapped[bool] = mapped_column(Boolean, default=False)
     available_market: Mapped[bool] = mapped_column(Boolean, default=False)
     tradeable: Mapped[bool] = mapped_column(Boolean, default=False)
+    sellable: Mapped[bool] = mapped_column(Boolean, default=False)
     
     rarity: Mapped[Rarity] = relationship()
     
