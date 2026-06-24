@@ -42,9 +42,7 @@ async def shop_page():
 def shop_cards(db: Session = Depends(get_db)):
     cards = db.scalars(
         select(MultiplierCard)
-        .where(
-            MultiplierCard.available_shop == True
-        )
+        .where(MultiplierCard.available_shop)
     ).all()
     return [serialize_card(card) for card in cards]
 
