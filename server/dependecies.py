@@ -5,8 +5,8 @@ from typing import Generator
 
 import secrets
 from passlib.context import CryptContext
-from sqlalchemy import DateTime, BigInteger, String, create_engine, select
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
+from sqlalchemy import DateTime, BigInteger, String, create_engine, select, Boolean, Float, ForeignKey, Integer
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker, relationship
 
 from .paths import DB_PATH
 
@@ -28,6 +28,55 @@ class User(Base):
     display_name: Mapped[str] = mapped_column(String)
     profile_link: Mapped[str] = mapped_column(String)
     avatar_url: Mapped[str] = mapped_column(String)
+    points: Mapped[int] = mapped_column(BigInteger, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    
+class Rarity(Base):
+    __tablename__ = "rarities"
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    name: Mapped[str] = mapped_column(String)
+    color: Mapped[str] = mapped_column(String)
+    multiplier: Mapped[float] = mapped_column(Float)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    
+class MultiplierCard(Base):
+    __tablename__ = "multiplier_cards"
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    rarity_id: Mapped[int] = mapped_column(ForeignKey("rarities.id"))
+    name: Mapped[str] = mapped_column(String)
+    description: Mapped[str] = mapped_column(String)
+    image_url: Mapped[str] = mapped_column(String)
+    points_cost: Mapped[int] = mapped_column(BigInteger, default=0)
+    available_shop: Mapped[bool] = mapped_column(Boolean, default=False)
+    available_market: Mapped[bool] = mapped_column(Boolean, default=False)
+    tradeable: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    rarity: Mapped[Rarity] = relationship()
+    
+class UserMultiplierCard(Base):
+    __tablename__ = "user_multiplier_cards"
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    card_id: Mapped[int] = mapped_column(ForeignKey("multiplier_cards.id"))
+    source: Mapped[str] = mapped_column(String, default="point_shop")
+    tradeable: Mapped[bool] = mapped_column(Boolean, default=False)
+    sellable: Mapped[bool] = mapped_column(Boolean, default=False)
+    equipped: Mapped[bool] = mapped_column(Boolean, default=False)
+    acquired_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    definition: Mapped[MultiplierCard] = relationship()
+    
+class PointTransaction(Base):
+    __tablename__ = "point_transactions"
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    amount: Mapped[int] = mapped_column(BigInteger)
+    reason: Mapped[str] = mapped_column(String)
+    related_card_instance_id: Mapped[int | None] = mapped_column(ForeignKey("user_multiplier_cards.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     
 DEFAULT_AVATAR_URL = "/avatars/default_avatar.png"
