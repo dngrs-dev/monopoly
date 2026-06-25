@@ -1,10 +1,33 @@
-[project]
-dynamic = ["dependencies"]
-[tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
 
+[project]
+name = "monopoly"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi==0.135.3",
+  "uvicorn[standard]==0.44.0",
+  "python-dotenv==1.2.2",
+  "python-jose[cryptography]==3.5.0",
+  "sqlalchemy==2.0.49",
+  "passlib==1.7.4",
+  "email-validator==2.3.0",
+  "python-multipart==0.0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==9.0.3",
+  "ruff==0.15.10",
+]
 
 [tool.pytest.ini_options]
 pythonpath = [
   "."
 ]
+
+[tool.setuptools.packages.find]
+include = ["boards*", "engine*", "server*"]
+namespaces = true
