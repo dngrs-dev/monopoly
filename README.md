@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688)
 ![License](https://img.shields.io/badge/license-MIT-green)
-[![CI](https://github.com/dngrs-dev/monopoly/actions/workflows/ci.yml/badge.svg)](https://github.com/dngrs-dev/monopoly/actions/workflows/ci.yml)
+[![CI](https://github.com/dngrs-dev/Deedbound/actions/workflows/ci.yml/badge.svg)](https://github.com/dngrs-dev/Deedbound/actions/workflows/ci.yml)
 
 A browser-playable property-trading game with a Python rules engine, FastAPI backend, realtime lobbies, authenticated profiles, and a lightweight vanilla web client.
 
