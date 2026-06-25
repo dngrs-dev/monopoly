@@ -108,7 +108,7 @@ def _calculate_rent(tile: OwnableTile, game: Game) -> int:
         return 0
     if isinstance(tile, StreetTile):
         rent = tile.rent_schedule[tile.improvement_level]
-        if game.rules.double_rent_on_monopoly:
+        if game.rules.double_rent_on_complete_group:
             group_tiles = game.board.get_group_tiles(tile.group_id)
             if tile.improvement_level == 0 and all(
                 t.owner == tile.owner for t in group_tiles

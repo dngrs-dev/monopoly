@@ -9,7 +9,7 @@ const signupToggleContainer = document.querySelector(".signup-toggle-container")
 const loginToggleContainer = document.querySelector(".login-toggle-container");
 
 async function loadSession() {
-    const session = await window.monopolySession;
+    const session = await window.deedboundSession;
 
     if (session) {
         window.location.assign("/profile/"+session.profile_link);

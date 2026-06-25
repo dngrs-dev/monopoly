@@ -24,8 +24,8 @@ async function setupHeaderActions() {
     const guestActions = document.querySelector(".header-guest-actions");
     const userActions = document.querySelector(".header-user-actions");
 
-    const user = window.monopolySession
-        ? await window.monopolySession
+    const user = window.deedboundSession
+        ? await window.deedboundSession
         : await fetch("/auth/session", { credentials: "include" })
             .then((response) => response.ok ? response.json() : null)
             .catch(() => null);

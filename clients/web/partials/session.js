@@ -1,4 +1,4 @@
-window.monopolySession = window.monopolySession || fetch("/auth/session", {
+window.deedboundSession = window.deedboundSession || fetch("/auth/session", {
     method: "GET",
     credentials: "include",
 })

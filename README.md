@@ -1,11 +1,11 @@
-# Monopoly
+# Deedbound
 
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![CI](https://github.com/dngrs-dev/monopoly/actions/workflows/ci.yml/badge.svg)](https://github.com/dngrs-dev/monopoly/actions/workflows/ci.yml)
 
-A browser-playable Monopoly-style game with a Python rules engine, FastAPI backend, realtime lobbies, authenticated profiles, and a lightweight vanilla web client.
+A browser-playable property-trading game with a Python rules engine, FastAPI backend, realtime lobbies, authenticated profiles, and a lightweight vanilla web client.
 
 The project is split cleanly between game logic and delivery code: the `engine` package owns the board-game rules, events, cards, choices, payments, auctions, trades, and tests, while `server` exposes the web app, auth, lobbies, WebSocket game sessions, profiles, shop, and inventory APIs.
 

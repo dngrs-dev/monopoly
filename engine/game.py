@@ -215,9 +215,9 @@ def _build_asset_management_choices(
     for pos, tile in enumerate(game.board.tiles):
         if isinstance(tile, StreetTile) and tile.owner == player.id:
             group_tiles = game.board.get_group_tiles(tile.group_id)
-            owns_monopoly = all(t.owner == player.id for t in group_tiles)
+            owns_group = all(t.owner == player.id for t in group_tiles)
 
-            if include_buy_improvements and owns_monopoly:
+            if include_buy_improvements and owns_group:
                 if tile.improvement_level < len(tile.rent_schedule) - 1:
                     improvement_price = tile.improvement_buy_price()
                     choices.append(
