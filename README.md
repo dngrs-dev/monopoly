@@ -1,92 +1,80 @@
-# Monopoly (Engine + WebSocket Demo)
-![Python Version](https://img.shields.io/badge/python-3.11+-blue)
+# Monopoly
+
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688)
 ![License](https://img.shields.io/badge/license-MIT-green)
+[![CI](https://github.com/dngrs-dev/monopoly/actions/workflows/ci.yml/badge.svg)](https://github.com/dngrs-dev/monopoly/actions/workflows/ci.yml)
 
-A small Monopoly-like game engine written in Python, plus a FastAPI WebSocket server and a minimal browser client.
+A browser-playable Monopoly-style game with a Python rules engine, FastAPI backend, realtime lobbies, authenticated profiles, and a lightweight vanilla web client.
 
-This repo is intentionally a **prototype / learning project**: the core is an event/choice-driven engine, and the server turns engine choices into UI actions.
+The project is split cleanly between game logic and delivery code: the `engine` package owns the board-game rules, events, cards, choices, payments, auctions, trades, and tests, while `server` exposes the web app, auth, lobbies, WebSocket game sessions, profiles, shop, and inventory APIs.
 
-## Structure
+## Highlights
 
-- `engine/` — core game engine (state + rules)
-- `server/` — FastAPI app
-- `clients/web/` — tiny HTML/JS client
-- `demo/` — terminal demo
-- `tests/` — unit tests
+| Area | What is included |
+| --- | --- |
+| Game engine | Turn phases, dice rolls, movement, jail, property ownership, rent, mortgages, improvements, payments, bankruptcy, cards, trades, and optional auction rules. |
+| Classic board | A 40-tile board builder with streets, railroads, utilities, taxes, Chance, Community Chest, Jail, Free Parking, Go To Jail, and Boardwalk. |
+| Realtime play | Lobby and game WebSockets keep players synchronized while choices are applied server-side. |
+| Accounts | Email registration, login, JWT cookie sessions, public profile links, display names, and avatar uploads. |
+| Progression layer | Points, multiplier cards, shop purchases, public inventory, rarity metadata, and transaction records. |
 
-## What’s implemented
-
-Engine:
-
-- Turn system with choice-based commands (see `engine/choices.py`)
-- Event stream describing what happened (see `engine/events.py`)
-- Movement + Start tile pass/land bonuses (supports multiple Start tiles)
-- Ownable tiles: buy, ownership tracking, rent payments, optional auctions
-- Chance tiles + card effects (move steps, move to position, money, go to jail, "get out of jail free")
-- Jail actions (pay fine, try doubles, use "get out of jail free" card)
-- Trade offers (make/send/accept/reject) (see `engine/tradeoffer.py`)
-
-## What’s incomplete
-
-WEB
-
-## Requirements
+## Tech Stack
 
 - Python 3.11+
-- Install dependencies:
+- FastAPI and Uvicorn
+- SQLAlchemy with SQLite by default
+- python-jose JWT cookies
+- Passlib password hashing
+- Vanilla HTML, CSS, and JavaScript client
+- Pytest and Ruff for development
 
-```bash
-pip install -r requirements.txt
+## Quick Start
+
+### 1. Install dependencies
+
+```powershell
+python -m pip install -e ".[dev]"
 ```
 
-## Run the web demo
+### 2. Set up environment
 
-Start the FastAPI server:
+Create and edit `.env` using `.env.sample` as a template.
 
-```bash
-python -m uvicorn server.app:app --host 127.0.0.1 --port 8000
-```
-or
-```bash
-fastapi dev server/app.py
-```
+Create a `.data` directory:
 
-## Run the terminal demo (no server)
-
-```bash
-python -m demo.run
+```text
+.data/
+  avatars/default_avatar.png
+  assets/
+    favicon.ico
+    logo.svg
 ```
 
-## Run tests / lint
+### 3. Run the web app
 
-```bash
-pytest
-ruff check .
+```powershell
+python -m uvicorn server.app:app --reload
 ```
 
-## WebSocket protocol
+## Web Routes
 
-Endpoint: `/ws`
+| Route | Purpose |
+| --- | --- |
+| `/` | Main page |
+| `/login` | Login and registration page |
+| `/browse` | Lobby browser |
+| `/games/{lobby_id}` | Realtime game board |
+| `/profile/{profile_link}` | Public profile page |
+| `/settings` | Account settings and avatar upload |
+| `/shop` | Multiplier card shop |
 
-Client → Server:
+## Notes
 
-- `{"type":"join","room_id":"room1","player_id":1}`
-- `{"type":"choose","room_id":"room1","player_id":1,"choice_id":"...","payload":{...}}`
-
-Trade payload:
-
-- For `SendTradeOfferChoice`, `payload` must include:
-  - `offered_money` (int)
-  - `requested_money` (int)
-  - `offered_properties_positions` (list[int])
-  - `requested_properties_positions` (list[int])
-
-Server → Client:
-
-- `joined`: initial snapshot + available choices
-- `update`: events + updated snapshot + new choices
-- `error`: validation/runtime errors (kept simple for the demo)
+- The server keeps lobbies and active games in memory, so running multiple server processes will not share active sessions without additional storage.
+- SQLite is the default persistence layer for accounts, profiles, shop inventory, owned cards, and point transactions.
+- `.data` and `.env` are ignored by Git, which keeps local databases, uploaded files, assets, and secrets out of commits.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+See [LICENSE](LICENSE) for details.
